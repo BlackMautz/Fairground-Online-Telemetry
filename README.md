@@ -1,5 +1,7 @@
 # Fairground Online – Web-Fahrpult & Telemetrie (`FairgroundTelemetry`) [BETA]
 
+[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/y7XMy8Jduq)
+
 > ⚠️ **BETA-Hinweis:** Diese Version wurde auf **Fairground Online v1.1.3** aktualisiert, es sind jedoch noch nicht alle Funktionen und Fahrgeschäfte nach dem Update vollständig durchgetestet. Feedback & Bugreports sind willkommen!
 
 Ein **BepInEx 6 (IL2CPP)** Plugin + integriertes **Web-Fahrpult** für *Fairground Online*, mit dem du Fahrgeschäfte, Lichtshows, Effekte, Jingles und die Kasse bequem über deinen Browser (am PC, Tablet oder Handy im WLAN) steuern kannst.
@@ -39,3 +41,9 @@ Ein **BepInEx 6 (IL2CPP)** Plugin + integriertes **Web-Fahrpult** für *Fairgrou
    - `BepInEx\plugins\FairgroundTelemetry.dll` → `<Spielordner>\BepInEx\plugins\FairgroundTelemetry.dll`
    - `FairgroundApp\` → `<Spielordner>\FairgroundApp\`
 3. **Spiel starten** – der Webserver startet automatisch im Hintergrund und dein Browser öffnet sich von selbst mit dem Fahrpult (`http://localhost:8080`).
+
+---
+
+## 💬 Community & Support (Discord)
+Fragen, Bugreports zur BETA oder weitere Fairground-Online-Mods? Komm auf unseren Discord-Server:
+👉 **[Hier dem Discord beitreten (discord.gg/y7XMy8Jduq)](https://discord.gg/y7XMy8Jduq)**
