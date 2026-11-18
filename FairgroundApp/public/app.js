@@ -2291,3 +2291,24 @@ async function togglePinballAutoDrive() {
 }
 window.togglePinballAutoDrive = togglePinballAutoDrive;
 window.updatePinballAutoDriveConfig = updatePinballAutoDriveConfig;
+
+// --- GitHub Update-Checker fuer Fairground-Online-Telemetry ---
+(async function checkTelemetryModUpdate() {
+    const CURRENT_TELEMETRY_VERSION = '1.0.0-beta';
+    try {
+        const res = await fetch('https://api.github.com/repos/BlackMautz/Fairground-Online-Telemetry/releases?per_page=1');
+        if (!res.ok) return;
+        const list = await res.json();
+        const rel = Array.isArray(list) ? list[0] : list;
+        if (!rel || !rel.tag_name) return;
+        const latest = String(rel.tag_name).replace(/^v/i, '').trim();
+        if (latest && latest !== CURRENT_TELEMETRY_VERSION) {
+            const banner = document.getElementById('telemetryUpdateBanner');
+            const text = document.getElementById('telemetryUpdateText');
+            const link = document.getElementById('telemetryUpdateLink');
+            if (text) text.textContent = `🆕 Neues Web-Fahrpult Update verfügbar: v${latest} (Du nutzt aktuell v${CURRENT_TELEMETRY_VERSION})`;
+            if (link && rel.html_url) link.href = rel.html_url;
+            if (banner) banner.style.display = 'flex';
+        }
+    } catch (e) { /* Offline / Rate-Limit ignorieren */ }
+})();
