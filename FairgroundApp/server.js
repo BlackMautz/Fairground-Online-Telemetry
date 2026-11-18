@@ -274,6 +274,7 @@ const MIME_TYPES = {
 
 // SSE Client list
 let sseClients = [];
+let lastStatePollMs = 0;
 let lastMergedStateJson = '';
 
 // --- AUTODRIVE ENGINE IN NODE.JS ---
@@ -633,6 +634,926 @@ function stopXplosionAutoDrive() {
     writeCommand({ setXplosionGondolaStop: true, setFog: false, setStrobo: false });
 }
 
+// --- SOUND EXPRESS AUTODRIVE ENGINE ---
+let soundExpressAutoDriveState = {
+    running: false,
+    phase: "BEREIT",
+    remaining: 0,
+    timeFormatted: "3:00",
+    tourIndex: 0,
+    tourName: "Tour 1: Kirmes-Klassiker (Vorwaerts, Rueckwaerts & Sirene)",
+    loop: false,
+    pauseSec: 30,
+    durationMin: 3
+};
+let seAutoCancel = false;
+let seForceStart = false;
+
+function setSePhase(phase, sec) {
+    soundExpressAutoDriveState.phase = phase;
+    if (sec !== undefined) {
+        soundExpressAutoDriveState.remaining = Math.max(0, Math.round(sec));
+        const m = Math.floor(soundExpressAutoDriveState.remaining / 60);
+        const s = soundExpressAutoDriveState.remaining % 60;
+        soundExpressAutoDriveState.timeFormatted = `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+}
+
+async function waitSeCancelable(ms) {
+    const start = Date.now();
+    while (Date.now() - start < ms) {
+        if (seAutoCancel) return false;
+        await sleep(100);
+    }
+    return !seAutoCancel;
+}
+
+function stopSoundExpressAutoDrive() {
+    seAutoCancel = true;
+    soundExpressAutoDriveState.running = false;
+    soundExpressAutoDriveState.phase = "GESTOPPT";
+    writeCommand({ setSoundExpressSpeed: 0.0, setSoundExpressDirection: 0, setSoundExpressSiren: false });
+}
+
+async function seSmoothAnfahrt(dir, stages) {
+    writeCommand({ setSoundExpressDirection: dir, setSoundExpressAdvanced: false });
+    for (const [spd, ms] of stages) {
+        if (seAutoCancel) return false;
+        writeCommand({ setSoundExpressSpeed: spd });
+        if (!await waitSeCancelable(ms)) return false;
+    }
+    return !seAutoCancel;
+}
+
+async function waitSeStop(maxMs = 30000, requireCanOpenHarness = false) {
+    // Kurz anbremsen lassen, damit speedPercent / canOpenHarness nicht veraltet sind
+    if (!await waitSeCancelable(2000)) return false;
+    const start = Date.now();
+    while (Date.now() - start < maxMs && !seAutoCancel) {
+        const se = getLatestTelemetry().soundExpress;
+        if (se) {
+            const canOpen = se.canOpenHarness === true;
+            const spdZero = se.speedPercent !== undefined && Math.abs(se.speedPercent) < 0.005;
+            if (requireCanOpenHarness ? canOpen : (canOpen || spdZero)) {
+                // Noch kurz stabil stehen lassen vor Richtungswechsel / Buegel-Auf
+                if (!await waitSeCancelable(requireCanOpenHarness ? 1500 : 800)) return false;
+                return true;
+            }
+        }
+        if (!await waitSeCancelable(300)) return false;
+    }
+    return !seAutoCancel;
+}
+
+async function runSoundExpressAutoRoutine(tourIdx = 0, durationMin = 3, skipWait = false) {
+    if (soundExpressAutoDriveState.running) stopSoundExpressAutoDrive();
+    await sleep(250);
+
+    seAutoCancel = false;
+    seForceStart = !!skipWait;
+    soundExpressAutoDriveState.running = true;
+    soundExpressAutoDriveState.tourIndex = tourIdx;
+
+    const tourNames = [
+        "Tour 1: Kirmes-Klassiker (Showman Mix)",
+        "Tour 2: Vollgas-Party (High-Speed & Kicks)",
+        "Tour 3: Nostalgie-Welle (Sanfter Klassiker)",
+        "Tour 4: Intervall-Attacke (Saegezahn Extrem)",
+        "Tour 5: Sirenen-Gewitter (Show-Modus)",
+        "Tour 6: Der Fake-Stopp (Rekommandeur-Trick)",
+        "Tour 7: Turbo-Rausch (Maximale Power)",
+        "Tour 8: Saturday Night Party-Eskalation (22:00 Uhr Modus)"
+    ];
+    soundExpressAutoDriveState.tourName = tourNames[tourIdx] || "Individuelle Fahrt";
+    soundExpressAutoDriveState.durationMin = Math.max(2, Math.min(5, durationMin || 3));
+
+    while (soundExpressAutoDriveState.running && !seAutoCancel) {
+        let timerInterval = null;
+        try {
+            // 1. Warten auf Gaeste & Tickets sammeln
+            setSePhase("WARTEN AUF GAESTE...", 0);
+            while (!seAutoCancel && !seForceStart) {
+                writeCommand({ collectTokens: true });
+                const se = (getLatestTelemetry().soundExpress) || {};
+                const occ = se.occupiedSeats || 0;
+                const tot = se.totalSeats || 20;
+                const clickable = getLatestTelemetry().clickableTokens || 0;
+                setSePhase(`EINSTIEG (${occ}/${tot} Plaetze)`, 0);
+                if ((tot > 0 && occ >= Math.max(1, Math.floor(tot * 0.8))) && clickable === 0) break;
+                if (!await waitSeCancelable(900)) break;
+            }
+            if (seAutoCancel) break;
+            seForceStart = false;
+
+            // 2. Start-Sequenz (Buegel & Hupe)
+            setSePhase("BUEGEL ZU & HUPEN", 3);
+            writeCommand({ setSoundExpressHarness: true, setSoundExpressEngine: true, setSoundExpressRide: true, setHorn: true });
+            if (!await waitSeCancelable(1200)) break;
+            writeCommand({ setHorn: false, setSoundExpressDispatch: true });
+            if (!await waitSeCancelable(1000)) break;
+
+            let currentSec = soundExpressAutoDriveState.durationMin * 60;
+            setSePhase("FAHRT STARTET!", currentSec);
+            timerInterval = setInterval(() => {
+                if (currentSec > 0 && !seAutoCancel && soundExpressAutoDriveState.running) {
+                    currentSec--;
+                    soundExpressAutoDriveState.remaining = currentSec;
+                    const m = Math.floor(currentSec / 60);
+                    const s = currentSec % 60;
+                    soundExpressAutoDriveState.timeFormatted = `${m}:${s < 10 ? '0' : ''}${s}`;
+                }
+            }, 1000);
+
+            const scaleMs = (ms) => Math.max(1000, Math.round(ms * (soundExpressAutoDriveState.durationMin / 3)));
+
+            // ========================================================
+            // ALLE 8 TOUREN (~3 Min Basis, realistisches langsames Anfahren ab 12-15%)
+            // ========================================================
+            if (tourIdx === 0) {
+                // --- TOUR 1: KIRMES-KLASSIKER (SHOWMAN MIX) ---
+                setSePhase("ANFAHRT: GANZ LANGSAM (12% -> 40%)", currentSec);
+                if (!await seSmoothAnfahrt(0, [[0.12, scaleMs(4500)], [0.24, scaleMs(4500)], [0.40, scaleMs(5000)]])) break;
+
+                setSePhase("TEMPO-STEIGERUNG (65% -> 90%)", currentSec);
+                writeCommand({ setSoundExpressSpeed: 0.65, peepHandsUp: true, peepRatio: 0.7 });
+                if (!await waitSeCancelable(scaleMs(14000))) break;
+                writeCommand({ setSoundExpressSpeed: 0.90, setSoundExpressSiren: true, peepScream: true, peepRatio: 0.9 });
+                if (!await waitSeCancelable(2500)) break;
+                writeCommand({ setSoundExpressSiren: false });
+                if (!await waitSeCancelable(scaleMs(16000))) break;
+
+                setSePhase("SCHWUNG-WELLE (55% <-> 100%)", currentSec);
+                writeCommand({ setSoundExpressSpeed: 0.55 });
+                if (!await waitSeCancelable(scaleMs(8000))) break;
+                writeCommand({ setSoundExpressSpeed: 1.0, setSoundExpressAdvanced: true });
+                if (!await waitSeCancelable(scaleMs(15000))) break;
+
+                setSePhase("AUSLAUF & RICHTUNGSWECHSEL", currentSec);
+                writeCommand({ setSoundExpressAdvanced: false, setSoundExpressSpeed: 0.25 });
+                if (!await waitSeCancelable(3000)) break;
+                writeCommand({ setSoundExpressSpeed: 0.0 });
+                if (!await waitSeStop(12000)) break;
+
+                setSePhase("RUECKWAERTS: SANFT ANROLLEN (15% -> 50%)", currentSec);
+                writeCommand({ setHorn: true, peepScream: true, peepRatio: 1.0 });
+                if (!await waitSeCancelable(1000)) break;
+                writeCommand({ setHorn: false });
+                if (!await seSmoothAnfahrt(1, [[0.15, scaleMs(4000)], [0.30, scaleMs(4000)], [0.50, scaleMs(5000)]])) break;
+
+                setSePhase("RUECKWAERTS: STEIGERUNG & TURBO!", currentSec);
+                writeCommand({ setSoundExpressSpeed: 0.75 });
+                if (!await waitSeCancelable(scaleMs(16000))) break;
+                writeCommand({ setSoundExpressSpeed: 1.0, setSoundExpressAdvanced: true, peepHandsUp: true, peepRatio: 1.0 });
+                if (!await waitSeCancelable(scaleMs(24000))) break;
+
+                setSePhase("FINALE: SIRENE & AUSLAUF (40% -> 15%)", currentSec);
+                writeCommand({ setSoundExpressAdvanced: false, setSoundExpressSiren: true, setSoundExpressSpeed: 0.40 });
+                if (!await waitSeCancelable(2500)) break;
+                writeCommand({ setSoundExpressSiren: false });
+                if (!await waitSeCancelable(scaleMs(10000))) break;
+                writeCommand({ setSoundExpressSpeed: 0.15 });
+                if (!await waitSeCancelable(scaleMs(4000))) break;
+
+            } else if (tourIdx === 1) {
+                // --- TOUR 2: VOLLGAS-PARTY (HIGH-SPEED & KICKS) ---
+                setSePhase("PARTY-START: ANROLLEN (15% -> 55%)", currentSec);
+                if (!await seSmoothAnfahrt(0, [[0.15, scaleMs(3500)], [0.32, scaleMs(3500)], [0.55, scaleMs(4500)]])) break;
+
+                setSePhase("PARTY-BOOST: 95% + TURBO!", currentSec);
+                writeCommand({ setSoundExpressSpeed: 0.95, setSoundExpressAdvanced: true, setSoundExpressSiren: true, peepHandsUp: true, peepRatio: 1.0 });
+                if (!await waitSeCancelable(2500)) break;
+                writeCommand({ setSoundExpressSiren: false });
+                if (!await waitSeCancelable(scaleMs(12500))) break;
+
+                setSePhase("SPEED-KICKS: VOLLGAS & DROP", currentSec);
+                for (let i = 0; i < 4; i++) {
+                    writeCommand({ setSoundExpressSpeed: 1.0, setSoundExpressAdvanced: true });
+                    if (!await waitSeCancelable(scaleMs(8500))) break;
+                    writeCommand({ setSoundExpressSpeed: 0.50, setSoundExpressAdvanced: false });
+                    if (!await waitSeCancelable(scaleMs(4500))) break;
+                }
+                if (seAutoCancel) break;
+
+                setSePhase("AUSLAUF & WECHSEL AUF RUECKWAERTS", currentSec);
+                writeCommand({ setSoundExpressAdvanced: false, setSoundExpressSpeed: 0.20, setHorn: true });
+                if (!await waitSeCancelable(800)) break;
+                writeCommand({ setHorn: false });
+                if (!await waitSeCancelable(2200)) break;
+                writeCommand({ setSoundExpressSpeed: 0.0 });
+                if (!await waitSeStop(12000)) break;
+
+                setSePhase("RUECKWAERTS: ANROLLEN (15% -> 50%)", currentSec);
+                if (!await seSmoothAnfahrt(1, [[0.15, scaleMs(3500)], [0.32, scaleMs(3500)], [0.55, scaleMs(4000)]])) break;
+
+                setSePhase("RUECKWAERTS PARTY + SIRENEN-AKZENT!", currentSec);
+                writeCommand({ setSoundExpressSpeed: 0.80, peepScream: true, peepRatio: 1.0 });
+                for (let j = 0; j < 3; j++) {
+                    writeCommand({ setSoundExpressSiren: true });
+                    if (!await waitSeCancelable(500)) break;
+                    writeCommand({ setSoundExpressSiren: false });
+                    if (!await waitSeCancelable(500)) break;
+                }
+                if (seAutoCancel) break;
+
+                writeCommand({ setSoundExpressSpeed: 1.0, setSoundExpressAdvanced: true, peepHandsUp: true, peepRatio: 1.0 });
+                if (!await waitSeCancelable(scaleMs(20000))) break;
+                writeCommand({ setSoundExpressSpeed: 0.60, setSoundExpressAdvanced: false });
+                if (!await waitSeCancelable(scaleMs(7000))) break;
+                writeCommand({ setSoundExpressSpeed: 1.0, setSoundExpressAdvanced: true });
+                if (!await waitSeCancelable(scaleMs(18000))) break;
+
+            } else if (tourIdx === 2) {
+                // --- TOUR 3: NOSTALGIE-WELLE (SANFTER KLASSIKER) ---
+                setSePhase("NOSTALGIE: SANFT ANROLLEN (10% -> 35%)", currentSec);
+                if (!await seSmoothAnfahrt(0, [[0.10, scaleMs(5000)], [0.20, scaleMs(5000)], [0.35, scaleMs(10000)]])) break;
+
+                writeCommand({ setSoundExpressSpeed: 0.55, peepHandsUp: true, peepRatio: 0.5 });
+                if (!await waitSeCancelable(scaleMs(20000))) break;
+
+                setSePhase("SANFTE STEIGERUNG (75% -> 85%)", currentSec);
+                writeCommand({ setSoundExpressSpeed: 0.75, peepScream: true, peepRatio: 0.6 });
+                if (!await waitSeCancelable(scaleMs(20000))) break;
+                writeCommand({ setSoundExpressSpeed: 0.85, setSoundExpressSiren: true });
+                if (!await waitSeCancelable(2000)) break;
+                writeCommand({ setSoundExpressSiren: false });
+                if (!await waitSeCancelable(scaleMs(14000))) break;
+
+                setSePhase("SANFTER AUSLAUF (35% -> 15% -> STOPP)", currentSec);
+                writeCommand({ setSoundExpressSpeed: 0.35 });
+                if (!await waitSeCancelable(scaleMs(5000))) break;
+                writeCommand({ setSoundExpressSpeed: 0.15 });
+                if (!await waitSeCancelable(scaleMs(3500))) break;
+                writeCommand({ setSoundExpressSpeed: 0.0 });
+                if (!await waitSeStop(12000)) break;
+
+                setSePhase("RUECKWAERTS-WELLE (12% -> 45% -> 70%)", currentSec);
+                if (!await seSmoothAnfahrt(1, [[0.12, scaleMs(4500)], [0.25, scaleMs(4500)], [0.45, scaleMs(10000)]])) break;
+                writeCommand({ setSoundExpressSpeed: 0.70, peepHandsUp: true, peepRatio: 0.8 });
+                if (!await waitSeCancelable(scaleMs(22000))) break;
+
+                setSePhase("SANFTES AUSGLEITEN (40% -> 15%)", currentSec);
+                writeCommand({ setSoundExpressSpeed: 0.40 });
+                if (!await waitSeCancelable(scaleMs(10000))) break;
+                writeCommand({ setSoundExpressSpeed: 0.15 });
+                if (!await waitSeCancelable(scaleMs(6000))) break;
+
+            } else if (tourIdx === 3) {
+                // --- TOUR 4: INTERVALL-ATTACKE (SAEGEZAHN EXTREM) ---
+                setSePhase("INTERVALL-ANLAUF (15% -> 50%)", currentSec);
+                if (!await seSmoothAnfahrt(0, [[0.15, scaleMs(3500)], [0.30, scaleMs(3500)], [0.50, scaleMs(5000)]])) break;
+
+                setSePhase("SAEGEZAHN VORWAERTS (95% <-> 45%)", currentSec);
+                for (let i = 0; i < 5; i++) {
+                    const useSiren = (i === 0 || i === 4);
+                    writeCommand({ setSoundExpressSpeed: 0.95, setSoundExpressAdvanced: true, setSoundExpressSiren: useSiren, peepHandsUp: true, peepRatio: 1.0 });
+                    if (useSiren) {
+                        if (!await waitSeCancelable(2000)) break;
+                        writeCommand({ setSoundExpressSiren: false });
+                        if (!await waitSeCancelable(scaleMs(6000))) break;
+                    } else {
+                        if (!await waitSeCancelable(scaleMs(8000))) break;
+                    }
+                    writeCommand({ setSoundExpressSpeed: 0.45, setSoundExpressAdvanced: false, setSoundExpressSiren: false });
+                    if (!await waitSeCancelable(scaleMs(4500))) break;
+                }
+                if (seAutoCancel) break;
+
+                setSePhase("AUSLAUF & RICHTUNGSWECHSEL", currentSec);
+                writeCommand({ setSoundExpressAdvanced: false, setSoundExpressSpeed: 0.20 });
+                if (!await waitSeCancelable(3000)) break;
+                writeCommand({ setSoundExpressSpeed: 0.0 });
+                if (!await waitSeStop(12000)) break;
+
+                setSePhase("RUECKWAERTS ANLAUF (15% -> 50%)", currentSec);
+                if (!await seSmoothAnfahrt(1, [[0.15, scaleMs(3500)], [0.30, scaleMs(3500)], [0.50, scaleMs(4000)]])) break;
+
+                setSePhase("SAEGEZAHN RUECKWAERTS (100% <-> 50%)", currentSec);
+                writeCommand({ peepScream: true, peepRatio: 1.0 });
+                for (let i = 0; i < 4; i++) {
+                    writeCommand({ setSoundExpressSpeed: 1.0, setSoundExpressAdvanced: true });
+                    if (!await waitSeCancelable(scaleMs(9000))) break;
+                    writeCommand({ setSoundExpressSpeed: 0.50, setSoundExpressAdvanced: false });
+                    if (!await waitSeCancelable(scaleMs(4500))) break;
+                }
+
+            } else if (tourIdx === 4) {
+                // --- TOUR 5: SIRENEN-GEWITTER (SHOW-MODUS) ---
+                setSePhase("SHOW-ANFAHRT (12% -> 50% -> 80%)", currentSec);
+                if (!await seSmoothAnfahrt(0, [[0.12, scaleMs(4000)], [0.28, scaleMs(4000)], [0.50, scaleMs(6000)]])) break;
+                writeCommand({ setSoundExpressSpeed: 0.80, peepHandsUp: true, peepRatio: 0.8 });
+
+                setSePhase("SIRENEN-AKZENT VORWAERTS!", currentSec);
+                for (let k = 0; k < 5; k++) {
+                    writeCommand({ setSoundExpressSiren: true }); if (!await waitSeCancelable(500)) break;
+                    writeCommand({ setSoundExpressSiren: false }); if (!await waitSeCancelable(500)) break;
+                }
+                if (seAutoCancel) break;
+
+                writeCommand({ setSoundExpressSpeed: 1.0, setSoundExpressAdvanced: true, peepScream: true, peepRatio: 1.0 });
+                if (!await waitSeCancelable(scaleMs(28000))) break;
+                writeCommand({ setSoundExpressSpeed: 0.55, setSoundExpressAdvanced: false });
+                if (!await waitSeCancelable(scaleMs(9000))) break;
+
+                setSePhase("AUSLAUF & SHOW-WECHSEL", currentSec);
+                writeCommand({ setSoundExpressSpeed: 0.20 });
+                if (!await waitSeCancelable(3000)) break;
+                writeCommand({ setSoundExpressSpeed: 0.0 });
+                if (!await waitSeStop(12000)) break;
+
+                setSePhase("RUECKWAERTS ANROLLEN (15% -> 60%)", currentSec);
+                if (!await seSmoothAnfahrt(1, [[0.15, scaleMs(4000)], [0.32, scaleMs(4000)], [0.60, scaleMs(8000)]])) break;
+
+                setSePhase("RUECKWAERTS-SHOW + POWER-SIRENE", currentSec);
+                writeCommand({ setSoundExpressSpeed: 1.0, setSoundExpressAdvanced: true, setSoundExpressSiren: true, peepHandsUp: true, peepRatio: 1.0 });
+                if (!await waitSeCancelable(3000)) break;
+                writeCommand({ setSoundExpressSiren: false });
+                if (!await waitSeCancelable(scaleMs(24000))) break;
+
+                setSePhase("FINALE: SIRENE & AUSLAUF (45% -> 15%)", currentSec);
+                writeCommand({ setSoundExpressAdvanced: false, setSoundExpressSpeed: 0.45, setSoundExpressSiren: true });
+                if (!await waitSeCancelable(2500)) break;
+                writeCommand({ setSoundExpressSiren: false });
+                if (!await waitSeCancelable(scaleMs(10000))) break;
+                writeCommand({ setSoundExpressSpeed: 0.15 });
+                if (!await waitSeCancelable(scaleMs(4000))) break;
+
+            } else if (tourIdx === 5) {
+                // --- TOUR 6: DER FAKE-STOPP (REKOMMANDEUR-TRICK) ---
+                setSePhase("TEIL 1: SANFT ANROLLEN (12% -> 55%)", currentSec);
+                if (!await seSmoothAnfahrt(0, [[0.12, scaleMs(4000)], [0.28, scaleMs(4000)], [0.55, scaleMs(6000)]])) break;
+                writeCommand({ setSoundExpressSpeed: 0.95, setSoundExpressAdvanced: true, peepHandsUp: true, peepRatio: 1.0 });
+                if (!await waitSeCancelable(scaleMs(28000))) break;
+
+                setSePhase("FAKE-ENDE... (LANGSAM AUSLAUFEN)", currentSec);
+                writeCommand({ setSoundExpressAdvanced: false, setSoundExpressSpeed: 0.35 });
+                if (!await waitSeCancelable(scaleMs(6000))) break;
+                writeCommand({ setSoundExpressSpeed: 0.15 });
+                if (!await waitSeCancelable(scaleMs(4000))) break;
+                writeCommand({ setSoundExpressSpeed: 0.0 });
+                if (!await waitSeStop(12000)) break;
+
+                setSePhase("WOLLEN WIR NOCHMAL?! (HUPE!)", currentSec);
+                writeCommand({ setHorn: true });
+                if (!await waitSeCancelable(1200)) break;
+                writeCommand({ setHorn: false });
+                if (!await waitSeCancelable(1500)) break;
+
+                setSePhase("UEBERRASCHUNG: RUECKWAERTS ANROLLEN!", currentSec);
+                if (!await seSmoothAnfahrt(1, [[0.15, scaleMs(3500)], [0.35, scaleMs(3500)], [0.65, scaleMs(6000)]])) break;
+                writeCommand({ setSoundExpressSiren: true, peepScream: true, peepRatio: 1.0 });
+                if (!await waitSeCancelable(2500)) break;
+                writeCommand({ setSoundExpressSiren: false });
+                if (!await waitSeCancelable(scaleMs(6000))) break;
+
+                writeCommand({ setSoundExpressSpeed: 1.0, setSoundExpressAdvanced: true, peepHandsUp: true, peepRatio: 1.0 });
+                if (!await waitSeCancelable(scaleMs(30000))) break;
+
+                setSePhase("AUSLAUF (45% -> 15%)", currentSec);
+                writeCommand({ setSoundExpressAdvanced: false, setSoundExpressSpeed: 0.45 });
+                if (!await waitSeCancelable(scaleMs(10000))) break;
+                writeCommand({ setSoundExpressSpeed: 0.15 });
+                if (!await waitSeCancelable(scaleMs(4500))) break;
+
+            } else if (tourIdx === 6) {
+                // --- TOUR 7: TURBO-RAUSCH (MAXIMALE POWER) ---
+                setSePhase("TURBO-ANFAHRT (15% -> 60% -> 100%)", currentSec);
+                if (!await seSmoothAnfahrt(0, [[0.15, scaleMs(3500)], [0.35, scaleMs(3500)], [0.60, scaleMs(5000)]])) break;
+                writeCommand({ setSoundExpressSpeed: 1.0, setSoundExpressAdvanced: true, peepHandsUp: true, peepRatio: 1.0 });
+                if (!await waitSeCancelable(scaleMs(28000))) break;
+
+                setSePhase("KURZ DURCHATMEN (55%) -> TURBO!", currentSec);
+                writeCommand({ setSoundExpressSpeed: 0.55, setSoundExpressAdvanced: false });
+                if (!await waitSeCancelable(scaleMs(7000))) break;
+                writeCommand({ setSoundExpressSpeed: 1.0, setSoundExpressAdvanced: true, setSoundExpressSiren: true });
+                if (!await waitSeCancelable(2500)) break;
+                writeCommand({ setSoundExpressSiren: false });
+                if (!await waitSeCancelable(scaleMs(20000))) break;
+
+                setSePhase("AUSLAUF & TURBO-WECHSEL", currentSec);
+                writeCommand({ setSoundExpressAdvanced: false, setSoundExpressSpeed: 0.25 });
+                if (!await waitSeCancelable(3000)) break;
+                writeCommand({ setSoundExpressSpeed: 0.0 });
+                if (!await waitSeStop(12000)) break;
+
+                setSePhase("RUECKWAERTS ANROLLEN (15% -> 65%)", currentSec);
+                if (!await seSmoothAnfahrt(1, [[0.15, scaleMs(3500)], [0.35, scaleMs(3500)], [0.65, scaleMs(5000)]])) break;
+
+                setSePhase("RUECKWAERTS TURBO-RAUSCH!", currentSec);
+                writeCommand({ setSoundExpressSpeed: 1.0, setSoundExpressAdvanced: true, peepHandsUp: true, peepRatio: 1.0 });
+                if (!await waitSeCancelable(scaleMs(28000))) break;
+
+                writeCommand({ setSoundExpressSpeed: 0.60, setSoundExpressAdvanced: false });
+                if (!await waitSeCancelable(scaleMs(8000))) break;
+                writeCommand({ setSoundExpressSpeed: 1.0, setSoundExpressAdvanced: true });
+                if (!await waitSeCancelable(scaleMs(20000))) break;
+
+            } else if (tourIdx === 7) {
+                // --- TOUR 8: SATURDAY NIGHT PARTY-ESKALATION (22:00 UHR MODUS) ---
+                const getRandomDelay = (min, max) => Math.floor(Math.random() * (max - min + 1) + min);
+
+                setSePhase("PARTY-START: LANGSAM ANROLLEN (15% -> 50%)", currentSec);
+                writeCommand({ setHorn: true, peepScream: true, peepRatio: 1.0 });
+                if (!await waitSeCancelable(1200)) break;
+                writeCommand({ setHorn: false });
+                if (!await seSmoothAnfahrt(0, [[0.15, scaleMs(3500)], [0.30, scaleMs(3500)], [0.50, scaleMs(4000)]])) break;
+
+                setSePhase("AUFDREHEN: 85% + SIRENE!", currentSec);
+                writeCommand({ setSoundExpressSpeed: 0.85, setSoundExpressSiren: true, peepHandsUp: true, peepRatio: 1.0 });
+                if (!await waitSeCancelable(2500)) break;
+                writeCommand({ setSoundExpressSiren: false });
+                if (!await waitSeCancelable(scaleMs(4000))) break;
+
+                setSePhase("VORWAERTS-ESKALATION (TURBO-KICKS)", currentSec);
+                for (let p = 0; p < 5; p++) {
+                    const kickDuration = getRandomDelay(5500, 9000);
+                    const kickSiren = (p === 0 || p === 3);
+                    writeCommand({ setSoundExpressSpeed: 1.0, setSoundExpressAdvanced: true, setSoundExpressSiren: kickSiren, peepHandsUp: true, peepRatio: 1.0 });
+                    if (kickSiren) {
+                        if (!await waitSeCancelable(2000)) break;
+                        writeCommand({ setSoundExpressSiren: false });
+                        if (!await waitSeCancelable(Math.max(1000, scaleMs(kickDuration) - 2000))) break;
+                    } else {
+                        if (!await waitSeCancelable(scaleMs(kickDuration))) break;
+                    }
+                    writeCommand({ setSoundExpressSpeed: 0.50, setSoundExpressAdvanced: false, setSoundExpressSiren: false });
+                    if (!await waitSeCancelable(scaleMs(3500))) break;
+                }
+                if (seAutoCancel) break;
+
+                setSePhase("PARTY-BREAK: AUSLAUF & LUFT HOLEN!", currentSec);
+                writeCommand({ setSoundExpressAdvanced: false, setSoundExpressSpeed: 0.20, setHorn: true });
+                if (!await waitSeCancelable(800)) break;
+                writeCommand({ setHorn: false });
+                if (!await waitSeCancelable(2200)) break;
+                writeCommand({ setSoundExpressSpeed: 0.0 });
+                if (!await waitSeStop(12000)) break;
+
+                setSePhase("RUECKWAERTS ANROLLEN (15% -> 55%)", currentSec);
+                if (!await seSmoothAnfahrt(1, [[0.15, scaleMs(3500)], [0.32, scaleMs(3500)], [0.55, scaleMs(4000)]])) break;
+
+                setSePhase("RUECKWAERTS-WAHNSINN: PARTY-TAKT!", currentSec);
+                writeCommand({ setSoundExpressSpeed: 0.80, peepHandsUp: true, peepRatio: 1.0 });
+                for (let s = 0; s < 5; s++) {
+                    const sirenSpeed = getRandomDelay(300, 500);
+                    writeCommand({ setSoundExpressSiren: true });
+                    if (!await waitSeCancelable(sirenSpeed)) break;
+                    writeCommand({ setSoundExpressSiren: false });
+                    if (!await waitSeCancelable(sirenSpeed)) break;
+                }
+                if (seAutoCancel) break;
+
+                setSePhase("FINALE: MAX POWER SATURDAY NIGHT!", currentSec);
+                writeCommand({ setSoundExpressAdvanced: true, setSoundExpressSpeed: 1.0, setSoundExpressSiren: true });
+                if (!await waitSeCancelable(3000)) break;
+                writeCommand({ setSoundExpressSiren: false });
+                if (!await waitSeCancelable(scaleMs(22000))) break;
+                writeCommand({ setSoundExpressSpeed: 0.55, setSoundExpressAdvanced: false });
+                if (!await waitSeCancelable(scaleMs(7000))) break;
+                writeCommand({ setSoundExpressSpeed: 1.0, setSoundExpressAdvanced: true });
+                if (!await waitSeCancelable(scaleMs(16000))) break;
+
+                setSePhase("AUSLAUF + PARTY-HUPEN!", currentSec);
+                writeCommand({ setSoundExpressAdvanced: false, setSoundExpressSiren: false, setSoundExpressSpeed: 0.25 });
+                for (let h = 0; h < 3; h++) {
+                    writeCommand({ setHorn: true }); if (!await waitSeCancelable(400)) break;
+                    writeCommand({ setHorn: false }); if (!await waitSeCancelable(400)) break;
+                }
+            }
+
+            if (seAutoCancel) break;
+
+            // 3. Abbremsen & Ausstieg (wirklich warten bis Spiel canOpenHarness === true meldet!)
+            setSePhase("ABBREMSEN...", 8);
+            writeCommand({ setSoundExpressAdvanced: false, setSoundExpressSiren: false, setSoundExpressSpeed: 0.0, setSoundExpressDirection: 0 });
+            await waitSeStop(35000, true);
+            if (seAutoCancel) break;
+
+            writeCommand({ setSoundExpressDispatch: false, setSoundExpressHarness: false, peepHandsUp: false, peepClap: true, peepRatio: 0.95 });
+            if (!await waitSeCancelable(5000)) break;
+            writeCommand({ peepClap: false });
+
+            clearInterval(timerInterval);
+            timerInterval = null;
+
+            if (soundExpressAutoDriveState.loop && !seAutoCancel) {
+                let remPause = Math.max(10, parseInt(soundExpressAutoDriveState.pauseSec) || 30);
+                while (remPause > 0 && !seAutoCancel && soundExpressAutoDriveState.loop) {
+                    setSePhase(`FAHRGASTWECHSEL (${remPause}s)`, remPause);
+                    if (!await waitSeCancelable(1000)) break;
+                    remPause--;
+                }
+            } else {
+                break;
+            }
+        } catch (err) {
+            console.error('SoundExpress AutoDrive error:', err);
+            break;
+        } finally {
+            if (timerInterval) clearInterval(timerInterval);
+        }
+    }
+
+    soundExpressAutoDriveState.running = false;
+    soundExpressAutoDriveState.phase = seAutoCancel ? "GESTOPPT" : "BEREIT";
+}
+
+// --- BOOSTER (TURAKA) AUTODRIVE ENGINE ---
+let boosterAutoDriveState = {
+    running: false,
+    phase: "BEREIT",
+    remaining: 0,
+    timeFormatted: "3:00",
+    tourIndex: 0,
+    tourName: "Tour 1: Show-Mix (Vorwaerts & Rueckwaerts)",
+    loop: false,
+    pauseSec: 30,
+    durationMin: 3
+};
+let boosterAutoCancel = false;
+let boosterForceStart = false;
+
+function setBoosterPhase(phase, sec) {
+    boosterAutoDriveState.phase = phase;
+    if (sec !== undefined) {
+        boosterAutoDriveState.remaining = Math.max(0, Math.round(sec));
+        const m = Math.floor(boosterAutoDriveState.remaining / 60);
+        const s = boosterAutoDriveState.remaining % 60;
+        boosterAutoDriveState.timeFormatted = `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+}
+
+async function waitBoosterCancelable(ms) {
+    const start = Date.now();
+    while (Date.now() - start < ms) {
+        if (boosterAutoCancel) return false;
+        await sleep(100);
+    }
+    return !boosterAutoCancel;
+}
+
+function stopBoosterAutoDrive() {
+    boosterAutoCancel = true;
+    boosterAutoDriveState.running = false;
+    boosterAutoDriveState.phase = "GESTOPPT";
+    writeCommand({ setBoosterArmSpeed: 0.0, setBoosterArmOn: false });
+}
+
+async function runBoosterAutoRoutine(tourIdx = 0, durationMin = 3, skipWait = false) {
+    if (boosterAutoDriveState.running) stopBoosterAutoDrive();
+    await sleep(250);
+
+    boosterAutoCancel = false;
+    boosterForceStart = !!skipWait;
+    boosterAutoDriveState.running = true;
+    boosterAutoDriveState.tourIndex = tourIdx;
+    boosterAutoDriveState.tourName = tourIdx === 2 ? "Tour 3: THE REAL PROPELLER SHOW (Dynamic Mix)" : (tourIdx === 1 ? "Tour 2: Turbo-Overdrive" : "Tour 1: Show-Mix (Vorwaerts & Rueckwaerts)");
+    boosterAutoDriveState.durationMin = Math.max(2, Math.min(5, durationMin || 3));
+
+    while (boosterAutoDriveState.running && !boosterAutoCancel) {
+        let timerInterval = null;
+        try {
+            const waitBoosterPodium = async (wantUp, maxSec = 10) => {
+                for (let i = 0; i < maxSec * 4 && !boosterAutoCancel; i++) {
+                    const b = (getLatestTelemetry().booster) || {};
+                    if (wantUp && b.podiumUp === true) return true;
+                    if (!wantUp && b.podiumDown === true) {
+                        if (!await waitBoosterCancelable(2000)) return false;
+                        return true;
+                    }
+                    if (!await waitBoosterCancelable(250)) return false;
+                }
+                if (!wantUp && !boosterAutoCancel) {
+                    if (!await waitBoosterCancelable(2000)) return false;
+                }
+                return !boosterAutoCancel;
+            };
+
+            // Pruefen, ob schon beide Buegel zu sind (z.B. manuell beladen + SOFORT START)
+            const bStartCheck = (getLatestTelemetry().booster) || {};
+            const alreadyLoaded = !!(bStartCheck.harnessClosed || (bStartCheck.g1Closed && bStartCheck.g2Closed));
+
+            if (!alreadyLoaded) {
+                const g1AlreadyOpen = (!bStartCheck.g1Closed && bStartCheck.g2Closed);
+                const g2AlreadyOpen = (bStartCheck.g1Closed && !bStartCheck.g2Closed);
+
+                if (!g2AlreadyOpen) {
+                    // 1. Gondel 1 (nur parken, falls nicht schon offen unten!)
+                    if (!g1AlreadyOpen) {
+                        setBoosterPhase("GONDEL 1 PARKEN...", 0);
+                        writeCommand({ setBoosterArmSpeed: 0.0, boosterPark1: true });
+                        if (!await waitBoosterCancelable(1500)) break;
+                        let p1Wait = 0;
+                        while (!boosterAutoCancel && p1Wait < 50) {
+                            const b = (getLatestTelemetry().booster) || {};
+                            if (b.stopBlinking === true || ((b.currentParkedGondola === 1 || b.park1BtnLight === 'On') && Math.abs(b.armSpeedPercent || 0) < 1)) break;
+                            p1Wait++;
+                            if (!await waitBoosterCancelable(500)) break;
+                        }
+                        if (boosterAutoCancel) break;
+                        writeCommand({ setBoosterArmOn: false });
+                        if (!await waitBoosterCancelable(500)) break;
+                    }
+
+                    if (!((getLatestTelemetry().booster) || {}).podiumUp) {
+                        setBoosterPhase("PODIUM HOCH (GONDEL 1)", 0);
+                        writeCommand({ boosterPodium: true });
+                        if (!await waitBoosterPodium(true, 10)) break;
+                    }
+
+                    while (!boosterAutoCancel && !boosterForceStart) {
+                        writeCommand({ collectTokens: true });
+                        const b = (getLatestTelemetry().booster) || {};
+                        const occ = b.g1Occupied || 0;
+                        const tot = b.g1Seats || 8;
+                        setBoosterPhase(`GONDEL 1 EINSTIEG (${occ}/${tot})`, 0);
+                        if (tot > 0 && occ >= tot) break;
+                        if (!await waitBoosterCancelable(800)) break;
+                    }
+                    if (boosterAutoCancel) break;
+                    setBoosterPhase("HUPEN & NPC BUEGEL (GONDEL 1)", 0);
+                    writeCommand({ setHorn: true });
+                    if (!await waitBoosterCancelable(1000)) break;
+                    writeCommand({ setHorn: false });
+                    for (let cw = 0; cw < 10 && !boosterAutoCancel; cw++) {
+                        if (((getLatestTelemetry().booster) || {}).g1Closed) break;
+                        if (!await waitBoosterCancelable(500)) break;
+                    }
+                    if (!((getLatestTelemetry().booster) || {}).g1Closed) {
+                        writeCommand({ boosterHarness1: true });
+                        if (!await waitBoosterCancelable(1500)) break;
+                    }
+                }
+
+                // 2. Gondel 2 (nur parken, falls nicht schon offen unten!)
+                if (!g2AlreadyOpen) {
+                    setBoosterPhase("PODIUM RUNTER VOR WECHSEL...", 0);
+                    writeCommand({ boosterPodium: false });
+                    if (!await waitBoosterPodium(false, 10)) break;
+
+                    setBoosterPhase("START DRUECKEN FUER GONDEL 2...", 0);
+                    for (let sw = 0; sw < 24 && !boosterAutoCancel; sw++) {
+                        const b = (getLatestTelemetry().booster) || {};
+                        if (b.startBlinking === true || b.startBtnLight === 'On' || b.armOn === true) break;
+                        if (!await waitBoosterCancelable(250)) break;
+                    }
+                    if (boosterAutoCancel) break;
+                    if (!((getLatestTelemetry().booster) || {}).armOn) {
+                        writeCommand({ setBoosterArmOn: true });
+                        if (!await waitBoosterCancelable(600)) break;
+                    }
+
+                    setBoosterPhase("GONDEL 2 PARKEN...", 0);
+                    writeCommand({ boosterPark2: true });
+                    if (!await waitBoosterCancelable(1500)) break;
+                    let p2Wait = 0;
+                    while (!boosterAutoCancel && p2Wait < 50) {
+                        const b = (getLatestTelemetry().booster) || {};
+                        if (b.stopBlinking === true || ((b.currentParkedGondola === 2 || b.park2BtnLight === 'On') && Math.abs(b.armSpeedPercent || 0) < 1)) break;
+                        p2Wait++;
+                        if (!await waitBoosterCancelable(500)) break;
+                    }
+                    if (boosterAutoCancel) break;
+                    writeCommand({ setBoosterArmOn: false });
+                    if (!await waitBoosterCancelable(500)) break;
+                }
+
+                if (!((getLatestTelemetry().booster) || {}).podiumUp) {
+                    setBoosterPhase("PODIUM HOCH (GONDEL 2)", 0);
+                    writeCommand({ boosterPodium: true });
+                    if (!await waitBoosterPodium(true, 10)) break;
+                }
+
+                while (!boosterAutoCancel && !boosterForceStart) {
+                    writeCommand({ collectTokens: true });
+                    const b = (getLatestTelemetry().booster) || {};
+                    const occ = b.g2Occupied || 0;
+                    const tot = b.g2Seats || 8;
+                    setBoosterPhase(`GONDEL 2 EINSTIEG (${occ}/${tot})`, 0);
+                    if (tot > 0 && occ >= tot) break;
+                    if (!await waitBoosterCancelable(800)) break;
+                }
+                if (boosterAutoCancel) break;
+                boosterForceStart = false;
+                setBoosterPhase("HUPEN & NPC BUEGEL (GONDEL 2)", 0);
+                writeCommand({ setHorn: true });
+                if (!await waitBoosterCancelable(1000)) break;
+                writeCommand({ setHorn: false });
+                for (let cw = 0; cw < 10 && !boosterAutoCancel; cw++) {
+                    if (((getLatestTelemetry().booster) || {}).g2Closed) break;
+                    if (!await waitBoosterCancelable(500)) break;
+                }
+                if (!((getLatestTelemetry().booster) || {}).g2Closed) {
+                    writeCommand({ boosterHarness2: true });
+                    if (!await waitBoosterCancelable(1500)) break;
+                }
+            } else {
+                boosterForceStart = false;
+            }
+
+            // 3. Erst Hupen, danach Podium ganz senken (+2s), danach gruenen START-Knopf druecken
+            setBoosterPhase("HUPEN VOR ABFAHRT", 2);
+            writeCommand({ setHorn: true });
+            if (!await waitBoosterCancelable(1000)) break;
+            writeCommand({ setHorn: false });
+            if (!await waitBoosterCancelable(1000)) break;
+
+            setBoosterPhase("PODIUM GANZ SENKEN...", 6);
+            writeCommand({ boosterPodium: false });
+            if (!await waitBoosterPodium(false, 10)) break;
+
+            setBoosterPhase("WARTE AUF START-KNOPF (BLINKT)...", 2);
+            for (let sw = 0; sw < 24 && !boosterAutoCancel; sw++) {
+                const b = (getLatestTelemetry().booster) || {};
+                if (b.startBlinking === true || b.startBtnLight === 'On' || b.armOn === true) break;
+                if (!await waitBoosterCancelable(250)) break;
+            }
+            if (boosterAutoCancel) break;
+
+            if (!((getLatestTelemetry().booster) || {}).armOn) {
+                writeCommand({ setBoosterArmOn: true });
+                if (!await waitBoosterCancelable(600)) break;
+            }
+
+            // Fahrt-Timer
+            let currentSec = boosterAutoDriveState.durationMin * 60;
+            setBoosterPhase("FAHRT STARTET!", currentSec);
+            timerInterval = setInterval(() => {
+                if (currentSec > 0 && !boosterAutoCancel && boosterAutoDriveState.running) {
+                    currentSec--;
+                    boosterAutoDriveState.remaining = currentSec;
+                    const m = Math.floor(currentSec / 60);
+                    const s = currentSec % 60;
+                    boosterAutoDriveState.timeFormatted = `${m}:${s < 10 ? '0' : ''}${s}`;
+                }
+            }, 1000);
+
+            const scaleMs = (ms) => Math.max(1000, Math.round(ms * (boosterAutoDriveState.durationMin / 3)));
+
+            // 4. Tour fahren (Gondelbremsen loesen!)
+            writeCommand({ boosterGondola1Brake: false, boosterGondola2Brake: false });
+            if (tourIdx === 1) {
+                setBoosterPhase("TURBO-OVERDRIVE: ANFAHRT VORWAERTS", currentSec);
+                writeCommand({ setBoosterArmOn: true, setBoosterArmReverse: false, setBoosterArmSpeed: 0.60, peepScream: true, peepRatio: 0.9 });
+                if (!await waitBoosterCancelable(scaleMs(6000))) break;
+
+                setBoosterPhase("TURBO-OVERDRIVE: 100% VOLLGAS VORWAERTS!", currentSec);
+                writeCommand({ setBoosterArmSpeed: 1.0, peepHandsUp: true, peepRatio: 1.0 });
+                if (!await waitBoosterCancelable(scaleMs(50000))) break;
+
+                setBoosterPhase("RICHTUNGSWECHSEL AUF RUECKWAERTS", currentSec);
+                writeCommand({ setBoosterArmSpeed: 0.0 });
+                if (!await waitBoosterCancelable(8000)) break;
+
+                setBoosterPhase("TURBO-OVERDRIVE: 100% VOLLGAS RUECKWAERTS!", currentSec);
+                writeCommand({ setBoosterArmReverse: true, setBoosterArmSpeed: 1.0, peepScream: true, peepRatio: 1.0 });
+                if (!await waitBoosterCancelable(scaleMs(65000))) break;
+            } else if (tourIdx === 2) {
+                // ★ TOUR 3: THE REAL PROPELLER SHOW (DYNAMIC MIX) ★
+                setBoosterPhase("SHOW-START: AUFSCHAUKELN", currentSec);
+                writeCommand({ setBoosterArmOn: true, setBoosterArmReverse: false, setBoosterArmSpeed: 0.30 });
+                if (!await waitBoosterCancelable(scaleMs(4000))) break;
+                writeCommand({ setBoosterArmSpeed: 0.60 });
+                if (!await waitBoosterCancelable(scaleMs(6000))) break;
+
+                setBoosterPhase("POWER-UP: GONDEL-LOCK & RELEASE", currentSec);
+                writeCommand({ boosterGondola1Brake: true, boosterGondola2Brake: true, setBoosterArmSpeed: 0.85, peepScream: true });
+                if (!await waitBoosterCancelable(scaleMs(8000))) break;
+
+                writeCommand({ boosterGondola1Brake: false, boosterGondola2Brake: false });
+                setBoosterPhase("LOOPING-ATTACK: VOLLGAS VORWAERTS!", currentSec);
+                writeCommand({ setBoosterArmSpeed: 1.0, peepHandsUp: true });
+                if (!await waitBoosterCancelable(scaleMs(20000))) break;
+
+                setBoosterPhase("SPEED-DIVE: TRAEGHEIT NUTZEN", currentSec);
+                writeCommand({ setBoosterArmSpeed: 0.35 });
+                if (!await waitBoosterCancelable(scaleMs(5000))) break;
+                writeCommand({ setBoosterArmSpeed: 1.0 });
+                if (!await waitBoosterCancelable(scaleMs(15000))) break;
+
+                setBoosterPhase("STOPP IM ZENITH & WECHSEL", currentSec);
+                writeCommand({ setBoosterArmSpeed: 0.0 });
+                if (!await waitBoosterCancelable(10000)) break;
+
+                setBoosterPhase("BACKWARD-ATTACK: RUECKWAERTS 100%", currentSec);
+                writeCommand({ setBoosterArmReverse: true, setBoosterArmSpeed: 0.80, peepScream: true });
+                if (!await waitBoosterCancelable(scaleMs(10000))) break;
+
+                writeCommand({ setBoosterArmSpeed: 1.0, peepHandsUp: true });
+                if (!await waitBoosterCancelable(scaleMs(25000))) break;
+
+                setBoosterPhase("FINALE: TURBO-KICKS!", currentSec);
+                for (let i = 0; i < 3; i++) {
+                    writeCommand({ setBoosterArmSpeed: 0.50 });
+                    if (!await waitBoosterCancelable(scaleMs(3000))) break;
+                    writeCommand({ setBoosterArmSpeed: 1.0 });
+                    if (!await waitBoosterCancelable(scaleMs(6000))) break;
+                }
+                if (boosterAutoCancel) break;
+
+                setBoosterPhase("AUSLAUF: DANKE FUER DIE FAHRT!", currentSec);
+                writeCommand({ setBoosterArmSpeed: 0.20, peepScream: false, peepHandsUp: false });
+                if (!await waitBoosterCancelable(scaleMs(10000))) break;
+            } else {
+                setBoosterPhase("TEIL 1: SANFTES ANFAHREN (45%)", currentSec);
+                writeCommand({ setBoosterArmOn: true, setBoosterArmReverse: false, setBoosterArmSpeed: 0.45 });
+                if (!await waitBoosterCancelable(scaleMs(10000))) break;
+
+                setBoosterPhase("STEIGERUNG: 75% POWER", currentSec);
+                writeCommand({ setBoosterArmSpeed: 0.75, peepScream: true, peepRatio: 0.8 });
+                if (!await waitBoosterCancelable(scaleMs(15000))) break;
+
+                setBoosterPhase("VOLLGAS VORWAERTS (100%)", currentSec);
+                writeCommand({ setBoosterArmSpeed: 1.0, peepHandsUp: true, peepRatio: 1.0 });
+                if (!await waitBoosterCancelable(scaleMs(35000))) break;
+
+                setBoosterPhase("ABBREMSEN & RICHTUNGSWECHSEL", currentSec);
+                writeCommand({ setBoosterArmSpeed: 0.0 });
+                if (!await waitBoosterCancelable(9000)) break;
+
+                setBoosterPhase("TEIL 2: RUECKWAERTS ANLAUF (60%)", currentSec);
+                writeCommand({ setBoosterArmReverse: true, setBoosterArmSpeed: 0.60 });
+                if (!await waitBoosterCancelable(scaleMs(12000))) break;
+
+                setBoosterPhase("FINALE: RUECKWAERTS 100% VOLLGAS!", currentSec);
+                writeCommand({ setBoosterArmSpeed: 1.0, peepScream: true, peepRatio: 1.0 });
+                if (!await waitBoosterCancelable(scaleMs(45000))) break;
+
+                setBoosterPhase("SHOW-SCHAUKELN (AUSLAUF)", currentSec);
+                writeCommand({ setBoosterArmSpeed: 0.35 });
+                if (!await waitBoosterCancelable(scaleMs(12000))) break;
+            }
+
+            if (boosterAutoCancel) break;
+
+            // 5. Abbremsen & Parken zum Ausstieg
+            setBoosterPhase("ABBREMSEN & STOP", 10);
+            writeCommand({ setBoosterArmSpeed: 0.0, setBoosterArmOn: false });
+            let stopW = 0;
+            while (!boosterAutoCancel && stopW < 25) {
+                const b = (getLatestTelemetry().booster) || {};
+                if (Math.abs(b.armSpeedPercent || 0) < 2) break;
+                stopW++;
+                if (!await waitBoosterCancelable(1000)) break;
+            }
+
+            // Gondel 1 aussteigen
+            setBoosterPhase("PARKEN GONDEL 1 & AUSSTIEG", 6);
+            writeCommand({ boosterPark1: true });
+            if (!await waitBoosterCancelable(4000)) break;
+            writeCommand({ setBoosterArmOn: false, boosterPodium: true });
+            if (!await waitBoosterPodium(true, 10)) break;
+            writeCommand({ boosterHarness1: false, peepClap: true, peepRatio: 0.9 });
+            if (!await waitBoosterCancelable(4500)) break;
+
+            // Gondel 2 aussteigen
+            setBoosterPhase("PARKEN GONDEL 2 & AUSSTIEG", 4);
+            writeCommand({ boosterPodium: false });
+            if (!await waitBoosterPodium(false, 10)) break;
+            for (let sw = 0; sw < 24 && !boosterAutoCancel; sw++) {
+                const b = (getLatestTelemetry().booster) || {};
+                if (b.startBlinking === true || b.startBtnLight === 'On' || b.armOn === true) break;
+                if (!await waitBoosterCancelable(250)) break;
+            }
+            if (!((getLatestTelemetry().booster) || {}).armOn) {
+                writeCommand({ setBoosterArmOn: true });
+                if (!await waitBoosterCancelable(600)) break;
+            }
+            writeCommand({ boosterPark2: true });
+            for (let pw = 0; pw < 50 && !boosterAutoCancel; pw++) {
+                const b = (getLatestTelemetry().booster) || {};
+                if (b.currentParkedGondola === 2 || b.park2BtnLight === 'On') break;
+                if (!await waitBoosterCancelable(500)) break;
+            }
+            writeCommand({ setBoosterArmOn: false, boosterPodium: true });
+            if (!await waitBoosterPodium(true, 10)) break;
+            writeCommand({ boosterHarness2: false, peepClap: false });
+            if (!await waitBoosterCancelable(3000)) break;
+
+            clearInterval(timerInterval);
+            timerInterval = null;
+
+            if (boosterAutoDriveState.loop && !boosterAutoCancel) {
+                let remPause = Math.max(10, parseInt(boosterAutoDriveState.pauseSec) || 30);
+                while (remPause > 0 && !boosterAutoCancel && boosterAutoDriveState.loop) {
+                    setBoosterPhase(`FAHRGASTWECHSEL (${remPause}s)`, remPause);
+                    if (!await waitBoosterCancelable(1000)) break;
+                    remPause--;
+                }
+            } else {
+                break;
+            }
+        } catch (err) {
+            console.error('Booster AutoDrive error:', err);
+            break;
+        } finally {
+            if (timerInterval) clearInterval(timerInterval);
+        }
+    }
+
+    boosterAutoDriveState.running = false;
+    boosterAutoDriveState.phase = boosterAutoCancel ? "GESTOPPT" : "BEREIT";
+}
+
 // --- PINBALL (FLIPPER) AUTODRIVE ENGINE ---
 let pinballAutoDriveState = {
     running: false,
@@ -647,6 +1568,7 @@ let pinballAutoDriveState = {
     jinglePeepReact: jingleConfig.enabled
 };
 let pinballAutoCancel = false;
+let pinballForceStart = false;
 
 const PINBALL_TOURS = [
     "★ ULTIMATE SHOWMAN-MIX (Max Kinetik & Doppel-Snaps) ★",
@@ -654,7 +1576,8 @@ const PINBALL_TOURS = [
     "Tour 3: Test 1 (Exakter Ablauf 00:00 - 05:25)",
     "Tour 4: Turbo-Schleuder (Maximaler Hub & Vollgas)",
     "Tour 5: Freitag Abend Party (Show & Stotterbremse)",
-    "Tour 6: Klassiker (Sanfter Hub & Finale)"
+    "Tour 6: Klassiker (Sanfter Hub & Finale)",
+    "Tour 7: REAL SHOWMAN STYLE (Huss Classic)"
 ];
 
 function setPinballPhase(phase, sec) {
@@ -676,7 +1599,7 @@ async function waitPinballCancelable(ms) {
     return !pinballAutoCancel;
 }
 
-async function runPinballAutoRoutine(tourIdx = 0, durationMin = 3) {
+async function runPinballAutoRoutine(tourIdx = 0, durationMin = 3, skipWait = false) {
     if (pinballAutoDriveState.running) stopPinballAutoDrive();
     await sleep(250);
 
@@ -692,8 +1615,9 @@ async function runPinballAutoRoutine(tourIdx = 0, durationMin = 3) {
             // ==========================================
             // 1. WARTEN BIS VOLL & TICKETS SAMMELN
             // ==========================================
+            pinballForceStart = !!skipWait;
             setPinballPhase("WARTEN BIS VOLL & TICKETS SAMMELN", 0);
-            while (!pinballAutoCancel) {
+            while (!pinballAutoCancel && !pinballForceStart) {
                 // Laufend Tickets abkassieren
                 writeCommand({ collectTokens: true });
 
@@ -712,7 +1636,8 @@ async function runPinballAutoRoutine(tourIdx = 0, durationMin = 3) {
                 const isFull = (occ >= 20 || (total > 0 && occ >= total));
                 const allTokensCollected = (clickable === 0);
 
-                if (isFull && allTokensCollected) {
+                if ((isFull && allTokensCollected) || pinballForceStart) {
+                    pinballForceStart = false;
                     break;
                 }
 
@@ -731,20 +1656,23 @@ async function runPinballAutoRoutine(tourIdx = 0, durationMin = 3) {
             if (pinballAutoCancel) break;
 
             // ==========================================
-            // 2. BÜGEL ZU DRÜCKEN
+            // 2. BÜGEL ZU DRÜCKEN (nur falls noch offen!)
             // ==========================================
-            setPinballPhase("BÜGEL ZU DRÜCKEN", 2);
-            writeCommand({ setPinballHarness: true, setPinballPlateSpeed: 0 });
-            if (!await waitPinballCancelable(1500)) break;
+            const pPreHarness = (getLatestTelemetry() || {}).pinball || {};
+            if (!pPreHarness.harnessClosed) {
+                setPinballPhase("BÜGEL ZU DRÜCKEN", 2);
+                writeCommand({ setPinballHarness: true, setPinballPlateSpeed: 0 });
+                if (!await waitPinballCancelable(1500)) break;
 
-            // ==========================================
-            // 3. HUPEN (WEGEN NPC START DIE ALLE BÜGEL ZUMACHEN)
-            // ==========================================
-            setPinballPhase("HUPEN (BÜGEL-KONTROLLE)", 2);
-            writeCommand({ setHorn: true });
-            if (!await waitPinballCancelable(1200)) break;
-            writeCommand({ setHorn: false });
-            if (!await waitPinballCancelable(800)) break;
+                // ==========================================
+                // 3. HUPEN (WEGEN NPC START DIE ALLE BÜGEL ZUMACHEN)
+                // ==========================================
+                setPinballPhase("HUPEN (BÜGEL-KONTROLLE)", 2);
+                writeCommand({ setHorn: true });
+                if (!await waitPinballCancelable(1200)) break;
+                writeCommand({ setHorn: false });
+                if (!await waitPinballCancelable(800)) break;
+            }
 
             // WARTEN BIS WIRKLICH ALLE 24 BÜGEL ZU SIND!
             // Erst wenn alle geschlossen sind (closedGondolas == totalGondolas oder harnessClosed == true), darf es weitergehen!
@@ -760,7 +1688,7 @@ async function runPinballAutoRoutine(tourIdx = 0, durationMin = 3) {
 
                 setPinballPhase(`BÜGEL-KONTROLLE (${closed}/${total} ZU)`, 0);
 
-                if (isAllClosed && !p.canOpenHarness) {
+                if (isAllClosed) {
                     break;
                 }
                 if (!await waitPinballCancelable(1000)) break;
@@ -1337,7 +2265,7 @@ async function runPinballAutoRoutine(tourIdx = 0, durationMin = 3) {
                 await triggerFlipperWhip("FINALER PARTY-WHIP 100% DISCO-OVERLOAD!");
                 if (!await waitPinballCancelable(scaleMs(14000))) break;
 
-            } else {
+            } else if (tourIdx === 5) {
                 // ========================================================
                 // Tour 4: Klassiker (Perfekt ausbalancierte Showman-Dynamik)
                 // ========================================================
@@ -1413,6 +2341,70 @@ async function runPinballAutoRoutine(tourIdx = 0, durationMin = 3) {
                 if (!await waitPinballCancelable(scaleMs(4000))) break;
                 await triggerFlipperWhip("FINALER KLASSIKER-WHIP 100% POWER!");
                 if (!await waitPinballCancelable(scaleMs(14000))) break;
+            } else if (tourIdx === 6) {
+                // ========================================================
+                // ★ REAL SHOWMAN STYLE: THE HUSS CLASSIC (Dramaturgie & Physik) ★
+                // ========================================================
+                setPinballPhase("START: GEMÜTLICHES EINSCHWINGEN (60%)", currentSec);
+                writeCommand({ setPinballDirection: 0, setPinballPlateSpeed: 0.6, setPinballGondolaBrake: false, setPinballAutoBrake: true, peepScream: false, peepRatio: 0.4 });
+                await moveHubWithDynamicSpeed(50, 0.6, 0.6, 6);
+                if (!await waitPinballCancelable(scaleMs(6000))) break;
+
+                setPinballPhase("STEIGERUNG: HUB AUF 100% & SPEED UP", currentSec);
+                writeCommand({ setPinballPlateSpeed: 0.8, peepScream: true, peepRatio: 0.6 });
+                await moveHubWithDynamicSpeed(100, 0.8, 0.8, 5);
+
+                await triggerFlipperWhip("ERSTER KICK: SCHWUNG HOLEN!");
+                if (!await waitPinballCancelable(scaleMs(8000))) break;
+
+                setPinballPhase("DER HÜPFER: KURZ ABTAUCHEN & REISSEN!", currentSec);
+                await moveHubWithDynamicSpeed(70, 0.7, 0.7, 3);
+                await moveHubWithDynamicSpeed(100, 1.0, 1.0, 3);
+                await triggerFlipperWhip("DOPPEL-SNAP (MAXIMALER DRUCK)!");
+                if (!await waitPinballCancelable(scaleMs(5000))) break;
+                await triggerFlipperWhip("NACHSCHLAG!");
+                if (!await waitPinballCancelable(scaleMs(6000))) break;
+
+                setPinballPhase("POWER-LIFT: AUS DER TIEFE NACH OBEN", currentSec);
+                writeCommand({ setPinballPlateSpeed: 0.4 });
+                await moveHubWithDynamicSpeed(30, 0.4, 0.4, 5);
+                await moveHubWithDynamicSpeed(100, 1.0, 1.0, 4);
+                await triggerFlipperWhip("PEAK-IMPACT!");
+                if (!await waitPinballCancelable(scaleMs(10000))) break;
+
+                setPinballPhase("STOPP AM ZENITH & RICHTUNGSWECHSEL", currentSec);
+                writeCommand({ setPinballPlateSpeed: 0.0 });
+                await moveHubWithDynamicSpeed(60, 0.0, 0.0, 5);
+
+                let swWait = 0;
+                while (!pinballAutoCancel && swWait < 18) {
+                    const p = (getLatestTelemetry().pinball) || {};
+                    if (p.plateStand || Math.abs(p.plateSpeedPercent || 0) < 2) break;
+                    swWait++;
+                    if (!await waitPinballCancelable(1000)) break;
+                }
+                if (pinballAutoCancel) break;
+
+                setPinballPhase("RÜCKWÄRTS-TURBO: JETZT GEHTS LOS!", currentSec);
+                writeCommand({ setPinballDirection: 2, setPinballPlateSpeed: 0.7, peepHandsUp: true, peepRatio: 1.0 });
+                if (!await waitPinballCancelable(scaleMs(5000))) break;
+
+                await triggerFlipperWhip("RÜCKWÄRTS-KICKSTART!");
+                await moveHubWithDynamicSpeed(100, 1.0, 1.0, 4);
+                if (!await waitPinballCancelable(scaleMs(8000))) break;
+
+                setPinballPhase("DAS FINALE: DAUER-FLIPPEN", currentSec);
+                writeCommand({ setPinballPlateSpeed: 1.0 });
+
+                await triggerFlipperWhip("FINALE SNAP 1");
+                if (!await waitPinballCancelable(scaleMs(5000))) break;
+                await triggerFlipperWhip("FINALE SNAP 2");
+                if (!await waitPinballCancelable(scaleMs(5000))) break;
+                await triggerFlipperWhip("FINALE SNAP 3");
+                if (!await waitPinballCancelable(scaleMs(5000))) break;
+
+                setPinballPhase("MAXIMALE FLIEHKRAFT: AUSLAUF", currentSec);
+                if (!await waitPinballCancelable(scaleMs(15000))) break;
             }
 
             if (pinballAutoCancel) break;
@@ -1452,8 +2444,8 @@ async function runPinballAutoRoutine(tourIdx = 0, durationMin = 3) {
             }
 
             // Sicherstellen dass Dispatch beendet ist
-            writeCommand({ setPinballDirection: 1, setPinballGondolaBrake: true });
-            if (!await waitPinballCancelable(500)) break;
+            writeCommand({ setPinballDirection: 1, setPinballGondolaBrake: true, setPinballDispatch: false });
+            if (!await waitPinballCancelable(600)) break;
 
             // ==========================================
             // 12. BÜGEL AUF
@@ -2376,7 +3368,9 @@ function getMergedState() {
         telemetry: { ...lastValidTelemetry, ...s2lServerOverrides },
         autoDrive: autoDriveState,
         xplosionAutoDrive: xplosionAutoDriveState,
-        pinballAutoDrive: pinballAutoDriveState
+        pinballAutoDrive: pinballAutoDriveState,
+        boosterAutoDrive: boosterAutoDriveState,
+        soundExpressAutoDrive: soundExpressAutoDriveState
     };
 }
 
@@ -2578,8 +3572,16 @@ const server = http.createServer((req, res) => {
 
     // API: Current state
     if (url.pathname === '/api/state' && req.method === 'GET') {
+        lastStatePollMs = Date.now();
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify(getMergedState()));
+    }
+
+    // API: Check if any dashboard browser tab is already connected
+    if (url.pathname === '/api/has-clients' && req.method === 'GET') {
+        const hasClients = sseClients.length > 0 || (Date.now() - lastStatePollMs < 3500);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ hasClients }));
     }
 
     // API: Local Network Info & QR-Code Target URL
@@ -2637,6 +3639,11 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
+
+                // Wenn bei laufendem Pinball AutoDrive gehupt wird -> Warten auf "Voll" sofort ueberspringen & Fahrt starten
+                if ((data.setHorn === true || data.setPinballHorn === true) && pinballAutoDriveState.running) {
+                    pinballForceStart = true;
+                }
                 if (typeof data.enabled === 'boolean') {
                     jingleConfig.enabled = data.enabled;
                     autoDriveState.jinglePeepReact = data.enabled;
@@ -2667,6 +3674,121 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // API: Start / Stop Sound Express AutoDrive
+    if (url.pathname === '/api/soundexpress-autodrive' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body);
+                if (data.action === 'start' || data.action === 'force_start') {
+                    let isSeatedSE = false;
+                    try {
+                        if (fs.existsSync(TELEMETRY_FILE)) {
+                            const telRaw = fs.readFileSync(TELEMETRY_FILE, 'utf8');
+                            if (telRaw.trim().length > 0) lastValidTelemetry = JSON.parse(telRaw);
+                        }
+                    } catch (e) {}
+                    if (lastValidTelemetry && lastValidTelemetry.operator) {
+                        isSeatedSE = !!lastValidTelemetry.operator.soundExpressSeated || !!lastValidTelemetry.operator.hasOperator;
+                    }
+                    if (!isSeatedSE) {
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        return res.end(JSON.stringify({
+                            success: false,
+                            blocked: true,
+                            reason: 'Du sitzt im Spiel nicht am Sound Express-Pult!'
+                        }));
+                    }
+                    if (data.action === 'force_start') seForceStart = true;
+                    const tour = parseInt(data.tour !== undefined ? data.tour : 0) || 0;
+                    if (data.loop !== undefined) soundExpressAutoDriveState.loop = !!data.loop;
+                    if (data.pauseSec !== undefined) soundExpressAutoDriveState.pauseSec = Math.max(10, parseInt(data.pauseSec) || 30);
+                    if (data.durationMin !== undefined) soundExpressAutoDriveState.durationMin = Math.max(2, Math.min(5, parseInt(data.durationMin) || 3));
+                    if (!soundExpressAutoDriveState.running || data.action === 'start') {
+                        runSoundExpressAutoRoutine(tour, soundExpressAutoDriveState.durationMin, data.action === 'force_start');
+                    }
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ success: true, running: true }));
+                } else if (data.action === 'config') {
+                    if (data.tour !== undefined) soundExpressAutoDriveState.tourIndex = parseInt(data.tour) || 0;
+                    if (data.loop !== undefined) soundExpressAutoDriveState.loop = !!data.loop;
+                    if (data.pauseSec !== undefined) soundExpressAutoDriveState.pauseSec = Math.max(10, parseInt(data.pauseSec) || 30);
+                    if (data.durationMin !== undefined) soundExpressAutoDriveState.durationMin = Math.max(2, Math.min(5, parseInt(data.durationMin) || 3));
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ success: true, soundExpressAutoDrive: soundExpressAutoDriveState }));
+                } else if (data.action === 'stop') {
+                    stopSoundExpressAutoDrive();
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ success: true, running: false }));
+                }
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Unknown action' }));
+            } catch (err) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err.message }));
+            }
+        });
+        return;
+    }
+
+    // API: Start / Stop Booster AutoDrive
+    if (url.pathname === '/api/booster-autodrive' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body);
+                if (data.action === 'start' || data.action === 'force_start') {
+                    let isSeatedBooster = false;
+                    try {
+                        if (fs.existsSync(TELEMETRY_FILE)) {
+                            const telRaw = fs.readFileSync(TELEMETRY_FILE, 'utf8');
+                            if (telRaw.trim().length > 0) lastValidTelemetry = JSON.parse(telRaw);
+                        }
+                    } catch (e) {}
+                    if (lastValidTelemetry && lastValidTelemetry.operator) {
+                        isSeatedBooster = !!lastValidTelemetry.operator.boosterSeated;
+                    }
+                    if (!isSeatedBooster) {
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        return res.end(JSON.stringify({
+                            success: false,
+                            blocked: true,
+                            reason: 'Du sitzt im Spiel nicht am Booster (Turaka)-Pult!'
+                        }));
+                    }
+                    if (data.action === 'force_start') boosterForceStart = true;
+                    const tour = parseInt(data.tour !== undefined ? data.tour : 0) || 0;
+                    if (data.loop !== undefined) boosterAutoDriveState.loop = !!data.loop;
+                    if (data.pauseSec !== undefined) boosterAutoDriveState.pauseSec = Math.max(10, parseInt(data.pauseSec) || 30);
+                    if (data.durationMin !== undefined) boosterAutoDriveState.durationMin = Math.max(2, Math.min(5, parseInt(data.durationMin) || 3));
+                    if (!boosterAutoDriveState.running || data.action === 'start') {
+                        runBoosterAutoRoutine(tour, boosterAutoDriveState.durationMin, data.action === 'force_start');
+                    }
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ success: true, running: true }));
+                } else if (data.action === 'config') {
+                    if (data.loop !== undefined) boosterAutoDriveState.loop = !!data.loop;
+                    if (data.pauseSec !== undefined) boosterAutoDriveState.pauseSec = Math.max(10, parseInt(data.pauseSec) || 30);
+                    if (data.durationMin !== undefined) boosterAutoDriveState.durationMin = Math.max(2, Math.min(5, parseInt(data.durationMin) || 3));
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ success: true, boosterAutoDrive: boosterAutoDriveState }));
+                } else if (data.action === 'stop') {
+                    stopBoosterAutoDrive();
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ success: true, running: false }));
+                }
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Unknown action' }));
+            } catch (err) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err.message }));
+            }
+        });
+        return;
+    }
+
     // API: Start / Stop Pinball AutoDrive
     if (url.pathname === '/api/pinball-autodrive' && req.method === 'POST') {
         let body = '';
@@ -2674,6 +3796,11 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
+
+                // Wenn bei laufendem Pinball AutoDrive gehupt wird -> Warten auf "Voll" sofort ueberspringen & Fahrt starten
+                if ((data.setHorn === true || data.setPinballHorn === true) && pinballAutoDriveState.running) {
+                    pinballForceStart = true;
+                }
                 if (data.action === 'start') {
                     let isSeatedPinball = false;
                     try {
@@ -2717,6 +3844,35 @@ const server = http.createServer((req, res) => {
                     }
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     return res.end(JSON.stringify({ success: true, pinballAutoDrive: pinballAutoDriveState }));
+                } else if (data.action === 'force_start') {
+                    pinballForceStart = true;
+                    if (!pinballAutoDriveState.running) {
+                        let isSeatedPinball = false;
+                        try {
+                            if (fs.existsSync(TELEMETRY_FILE)) {
+                                const telRaw = fs.readFileSync(TELEMETRY_FILE, 'utf8');
+                                if (telRaw.trim().length > 0) lastValidTelemetry = JSON.parse(telRaw);
+                            }
+                        } catch (e) {}
+                        if (lastValidTelemetry && lastValidTelemetry.operator) {
+                            isSeatedPinball = !!lastValidTelemetry.operator.pinballSeated;
+                        }
+                        if (!isSeatedPinball) {
+                            res.writeHead(200, { 'Content-Type': 'application/json' });
+                            return res.end(JSON.stringify({
+                                success: false,
+                                blocked: true,
+                                reason: 'Du sitzt im Spiel nicht am Flipper (Pinball)-Pult!'
+                            }));
+                        }
+                        const tour = parseInt(data.tour !== undefined ? data.tour : 0) || 0;
+                        if (data.loop !== undefined) pinballAutoDriveState.loop = !!data.loop;
+                        if (data.pauseSec !== undefined) pinballAutoDriveState.pauseSec = Math.max(10, parseInt(data.pauseSec) || 45);
+                        if (data.durationMin !== undefined) pinballAutoDriveState.durationMin = Math.max(1, Math.min(6, parseInt(data.durationMin) || 3));
+                        runPinballAutoRoutine(tour, pinballAutoDriveState.durationMin, true);
+                    }
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ success: true, forced: true, running: true }));
                 } else if (data.action === 'stop') {
                     stopPinballAutoDrive();
                     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -2739,6 +3895,11 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
+
+                // Wenn bei laufendem Pinball AutoDrive gehupt wird -> Warten auf "Voll" sofort ueberspringen & Fahrt starten
+                if ((data.setHorn === true || data.setPinballHorn === true) && pinballAutoDriveState.running) {
+                    pinballForceStart = true;
+                }
                 if (data.action === 'start') {
                     let isSeatedXplosion = false;
                     try {
@@ -2767,6 +3928,35 @@ const server = http.createServer((req, res) => {
                     runXplosionAutoRoutine();
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     return res.end(JSON.stringify({ success: true, running: true }));
+                } else if (data.action === 'force_start') {
+                    pinballForceStart = true;
+                    if (!pinballAutoDriveState.running) {
+                        let isSeatedPinball = false;
+                        try {
+                            if (fs.existsSync(TELEMETRY_FILE)) {
+                                const telRaw = fs.readFileSync(TELEMETRY_FILE, 'utf8');
+                                if (telRaw.trim().length > 0) lastValidTelemetry = JSON.parse(telRaw);
+                            }
+                        } catch (e) {}
+                        if (lastValidTelemetry && lastValidTelemetry.operator) {
+                            isSeatedPinball = !!lastValidTelemetry.operator.pinballSeated;
+                        }
+                        if (!isSeatedPinball) {
+                            res.writeHead(200, { 'Content-Type': 'application/json' });
+                            return res.end(JSON.stringify({
+                                success: false,
+                                blocked: true,
+                                reason: 'Du sitzt im Spiel nicht am Flipper (Pinball)-Pult!'
+                            }));
+                        }
+                        const tour = parseInt(data.tour !== undefined ? data.tour : 0) || 0;
+                        if (data.loop !== undefined) pinballAutoDriveState.loop = !!data.loop;
+                        if (data.pauseSec !== undefined) pinballAutoDriveState.pauseSec = Math.max(10, parseInt(data.pauseSec) || 45);
+                        if (data.durationMin !== undefined) pinballAutoDriveState.durationMin = Math.max(1, Math.min(6, parseInt(data.durationMin) || 3));
+                        runPinballAutoRoutine(tour, pinballAutoDriveState.durationMin, true);
+                    }
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ success: true, forced: true, running: true }));
                 } else if (data.action === 'stop') {
                     stopXplosionAutoDrive();
                     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -2789,6 +3979,11 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
+
+                // Wenn bei laufendem Pinball AutoDrive gehupt wird -> Warten auf "Voll" sofort ueberspringen & Fahrt starten
+                if ((data.setHorn === true || data.setPinballHorn === true) && pinballAutoDriveState.running) {
+                    pinballForceStart = true;
+                }
                 if (data.action === 'start') {
                     let isSeatedMegaDance = false;
                     try {
@@ -2833,6 +4028,35 @@ const server = http.createServer((req, res) => {
                     }
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     return res.end(JSON.stringify({ success: true, autoDrive: autoDriveState }));
+                } else if (data.action === 'force_start') {
+                    pinballForceStart = true;
+                    if (!pinballAutoDriveState.running) {
+                        let isSeatedPinball = false;
+                        try {
+                            if (fs.existsSync(TELEMETRY_FILE)) {
+                                const telRaw = fs.readFileSync(TELEMETRY_FILE, 'utf8');
+                                if (telRaw.trim().length > 0) lastValidTelemetry = JSON.parse(telRaw);
+                            }
+                        } catch (e) {}
+                        if (lastValidTelemetry && lastValidTelemetry.operator) {
+                            isSeatedPinball = !!lastValidTelemetry.operator.pinballSeated;
+                        }
+                        if (!isSeatedPinball) {
+                            res.writeHead(200, { 'Content-Type': 'application/json' });
+                            return res.end(JSON.stringify({
+                                success: false,
+                                blocked: true,
+                                reason: 'Du sitzt im Spiel nicht am Flipper (Pinball)-Pult!'
+                            }));
+                        }
+                        const tour = parseInt(data.tour !== undefined ? data.tour : 0) || 0;
+                        if (data.loop !== undefined) pinballAutoDriveState.loop = !!data.loop;
+                        if (data.pauseSec !== undefined) pinballAutoDriveState.pauseSec = Math.max(10, parseInt(data.pauseSec) || 45);
+                        if (data.durationMin !== undefined) pinballAutoDriveState.durationMin = Math.max(1, Math.min(6, parseInt(data.durationMin) || 3));
+                        runPinballAutoRoutine(tour, pinballAutoDriveState.durationMin, true);
+                    }
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ success: true, forced: true, running: true }));
                 } else if (data.action === 'stop') {
                     stopAutoDrive();
                     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -2855,6 +4079,11 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
+
+                // Wenn bei laufendem Pinball AutoDrive gehupt wird -> Warten auf "Voll" sofort ueberspringen & Fahrt starten
+                if ((data.setHorn === true || data.setPinballHorn === true) && pinballAutoDriveState.running) {
+                    pinballForceStart = true;
+                }
 
                 // Option 2 Operator-Lock:
                 // Check operator seating status per ride from telemetry
@@ -2903,8 +4132,18 @@ const server = http.createServer((req, res) => {
 
                 const boosterCommands = [
                     'setBoosterArmSpeed', 'setBoosterArmOn', 'setBoosterArmReverse',
-                    'setBoosterPark', 'setBoosterG1Brake', 'setBoosterG2Brake',
+                    'setBoosterPark', 'boosterPark1', 'boosterPark2', 'boosterReset',
+                    'boosterHarness1', 'boosterHarness2',
+                    'boosterGondola1Brake', 'boosterGondola2Brake',
+                    'setBoosterG1Brake', 'setBoosterG2Brake',
                     'setBoosterPower', 'setBoosterAirPistole', 'boosterPodium'
+                ];
+
+                const soundExpressCommands = [
+                    'setSoundExpressEngine', 'setSoundExpressRide', 'setSoundExpressDispatch',
+                    'setSoundExpressSpeed', 'setSoundExpressDirection', 'setSoundExpressAdvanced',
+                    'setSoundExpressSiren', 'setSoundExpressHarness', 'setSoundExpressReset',
+                    'setSoundExpressEStop'
                 ];
 
                 const xplosionCommands = [

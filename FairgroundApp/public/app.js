@@ -404,24 +404,29 @@ function switchActiveRide(mode) {
     document.getElementById('tabRideBooster')?.classList.toggle('active', mode === 'booster');
     document.getElementById('tabRideXplosion')?.classList.toggle('active', mode === 'xplosion');
     document.getElementById('tabRidePinball')?.classList.toggle('active', mode === 'pinball');
+    document.getElementById('tabRideSoundExpress')?.classList.toggle('active', mode === 'soundexpress');
 
     const mdView = document.getElementById('driveViewMegaDance');
     const boosterView = document.getElementById('driveViewBooster');
     const xplosionView = document.getElementById('driveViewXplosion');
     const pinballView = document.getElementById('driveViewPinball');
+    const seView = document.getElementById('driveViewSoundExpress');
     if (mdView) mdView.style.display = (mode === 'megadance') ? 'block' : 'none';
     if (boosterView) boosterView.style.display = (mode === 'booster') ? 'block' : 'none';
     if (xplosionView) xplosionView.style.display = (mode === 'xplosion') ? 'block' : 'none';
     if (pinballView) pinballView.style.display = (mode === 'pinball') ? 'block' : 'none';
+    if (seView) seView.style.display = (mode === 'soundexpress') ? 'block' : 'none';
 
     const leftMd = document.getElementById('leftViewMegaDance');
     const leftBooster = document.getElementById('leftViewBooster');
     const leftXplosion = document.getElementById('leftViewXplosion');
     const leftPinball = document.getElementById('leftViewPinball');
+    const leftSe = document.getElementById('leftViewSoundExpress');
     if (leftMd) leftMd.style.display = (mode === 'megadance') ? 'block' : 'none';
     if (leftBooster) leftBooster.style.display = (mode === 'booster') ? 'block' : 'none';
     if (leftXplosion) leftXplosion.style.display = (mode === 'xplosion') ? 'block' : 'none';
     if (leftPinball) leftPinball.style.display = (mode === 'pinball') ? 'block' : 'none';
+    if (leftSe) leftSe.style.display = (mode === 'soundexpress') ? 'block' : 'none';
 
     const sub = document.getElementById('rideDeskSub');
     if (sub) {
@@ -429,20 +434,30 @@ function switchActiveRide(mode) {
         else if (mode === 'booster') sub.textContent = 'LEITSTAND / BOOSTER PROPELLER';
         else if (mode === 'xplosion') sub.textContent = 'LEITSTAND / XPLOSION SKYSHOT';
         else if (mode === 'pinball') sub.textContent = 'LEITSTAND / FLIPPER (PINBALL)';
+        else if (mode === 'soundexpress') sub.textContent = 'LEITSTAND / SOUND EXPRESS';
     }
 
     const isXplosion = (mode === 'xplosion');
+    const isSoundExpress = (mode === 'soundexpress');
 
-    // Bei Xplosion alle Funktionen ausblenden, die das Fahrgeschäft im Spiel gar nicht hat:
+    // Funktionen ausblenden, die das jeweilige Fahrgeschäft im Spiel gar nicht hat:
     const hideOnXplosionIds = [
         'btnFlame', 'btnBubbles', 'btnSpots', 'spotColorIndicator',
         'btnMHOn', 'btnMHLightSync', 's2lBtn_gondelpause',
         'lbl_s2lFlame', 'lbl_s2lBubble', 'lbl_s2lSpot', 's2lSingleLightsBox',
         'tabBtnMhGobo', 'mhSlidersBox'
     ];
+    const hideOnSoundExpressIds = [
+        'btnFlame', 'lbl_s2lFlame',
+        'btnBubbles', 'lbl_s2lBubble',
+        's2lBtn_gondelpause'
+    ];
     hideOnXplosionIds.forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.style.display = isXplosion ? 'none' : '';
+        if (!el) return;
+        const shouldHide = (isXplosion && hideOnXplosionIds.includes(id)) ||
+                           (isSoundExpress && hideOnSoundExpressIds.includes(id));
+        el.style.display = shouldHide ? 'none' : '';
     });
 
     // Tab-Beschriftung für Licht-Matrix an aktives Fahrgeschäft anpassen
@@ -550,7 +565,8 @@ function updateUI(data) {
         const boosterSeated = !!tel.operator.boosterSeated;
         const xplosionSeated = !!tel.operator.xplosionSeated;
         const pinballSeated = !!tel.operator.pinballSeated;
-        const hasOp = mdSeated || boosterSeated || xplosionSeated || pinballSeated;
+        const soundExpressSeated = !!tel.operator.soundExpressSeated;
+        const hasOp = mdSeated || boosterSeated || xplosionSeated || pinballSeated || soundExpressSeated;
 
         // Auto-Switch Tab zum aktuell im Spiel besetzten Fahrgeschäft
         if (tel.operator.activeRide === 'pinball' && activeRideMode !== 'pinball') {
@@ -561,9 +577,11 @@ function updateUI(data) {
             switchActiveRide('booster');
         } else if (tel.operator.activeRide === 'megadance' && activeRideMode !== 'megadance') {
             switchActiveRide('megadance');
+        } else if (tel.operator.activeRide === 'soundexpress' && activeRideMode !== 'soundexpress') {
+            switchActiveRide('soundexpress');
         }
 
-        const currentRideSeated = (activeRideMode === 'megadance') ? mdSeated : (activeRideMode === 'booster' ? boosterSeated : (activeRideMode === 'pinball' ? pinballSeated : xplosionSeated));
+        const currentRideSeated = (activeRideMode === 'megadance') ? mdSeated : (activeRideMode === 'booster' ? boosterSeated : (activeRideMode === 'pinball' ? pinballSeated : (activeRideMode === 'soundexpress' ? soundExpressSeated : xplosionSeated)));
 
         let opStatusTitle = 'UNBESETZT';
         if (hasOp) {
@@ -571,6 +589,7 @@ function updateUI(data) {
             else if (xplosionSeated) opStatusTitle = 'OPERATOR (XPLOSION)';
             else if (boosterSeated) opStatusTitle = 'OPERATOR (BOOSTER)';
             else if (mdSeated) opStatusTitle = 'OPERATOR (MEGADANCE)';
+            else if (soundExpressSeated) opStatusTitle = 'OPERATOR (SOUND EXPRESS)';
         }
 
         setText('operatorNameVal', tel.operator.name || (hasOp ? 'Bediener' : 'Unbesetzt'));
@@ -592,6 +611,7 @@ function updateUI(data) {
         document.body.classList.toggle('booster-locked', !boosterSeated);
         document.body.classList.toggle('xplosion-locked', !xplosionSeated);
         document.body.classList.toggle('pinball-locked', !pinballSeated);
+        document.body.classList.toggle('soundexpress-locked', !soundExpressSeated);
     }
 
     // In-Game Time & Weather
@@ -832,15 +852,16 @@ function updateUI(data) {
             const boosterSeated = tel.operator ? !!tel.operator.boosterSeated : false;
             const xplosionSeated = tel.operator ? !!tel.operator.xplosionSeated : false;
             const pinballSeated = tel.operator ? !!tel.operator.pinballSeated : false;
-            const currentRideSeated = (activeRideMode === 'megadance') ? mdSeated : (activeRideMode === 'booster' ? boosterSeated : (activeRideMode === 'pinball' ? pinballSeated : xplosionSeated));
+            const soundExpressSeated = tel.operator ? !!tel.operator.soundExpressSeated : false;
+            const currentRideSeated = (activeRideMode === 'megadance') ? mdSeated : (activeRideMode === 'booster' ? boosterSeated : (activeRideMode === 'pinball' ? pinballSeated : (activeRideMode === 'soundexpress' ? soundExpressSeated : xplosionSeated)));
 
             if (!currentRideSeated) {
                 badge.textContent = `${activeRideMode.toUpperCase()} UNBESETZT`;
                 badge.className = 'mode-badge locked';
-            } else if (isEStop || (activeRideMode === 'pinball' && tel.pinball && tel.pinball.estop)) {
+            } else if (isEStop || (activeRideMode === 'pinball' && tel.pinball && tel.pinball.estop) || (activeRideMode === 'soundexpress' && tel.soundExpress && tel.soundExpress.eStop)) {
                 badge.textContent = 'NOT-AUS AKTIV';
                 badge.className = 'mode-badge estop-active';
-            } else if (md.booted || (tel.operator && (tel.operator.megadanceSeated || tel.operator.pinballSeated)) || !!tel.selfControlling) {
+            } else if (md.booted || (tel.operator && (tel.operator.megadanceSeated || tel.operator.pinballSeated || tel.operator.soundExpressSeated)) || !!tel.selfControlling) {
                 badge.textContent = 'BETRIEBSBEREIT';
                 badge.className = 'mode-badge ready';
             } else {
@@ -916,6 +937,21 @@ function updateUI(data) {
             const safetyPill = document.getElementById('harnessSafetyPill');
             if (safetyPill) {
                 safetyPill.className = 'safety-indicator ' + (allBoosterClosed ? 'safe' : 'danger');
+            }
+        } else if (activeRideMode === 'soundexpress') {
+            const se = tel.soundExpress || {};
+            const totalS = se.totalSeats || 20;
+            const closedS = se.closedSeats || 0;
+            const occS = se.occupiedSeats || 0;
+            const occPct = totalS > 0 ? Math.round((occS / totalS) * 100) : 0;
+            setText('safetyText', `BÜGEL: ${closedS} / ${totalS} BÜGEL`);
+            setText('occDetailVal', `${occS} / ${totalS} Plätze besetzt`);
+            setText('occPctVal', `${occPct}%`);
+            const bar = document.getElementById('occBarFill');
+            if (bar) bar.style.width = `${occPct}%`;
+            const safetyPill = document.getElementById('harnessSafetyPill');
+            if (safetyPill) {
+                safetyPill.className = 'safety-indicator ' + (se.harnessClosed ? 'safe' : 'danger');
             }
         }
 
@@ -1134,6 +1170,109 @@ function updateUI(data) {
         const pbJingleChk = document.getElementById('adPinballJingleReactCheck');
         if (pbJingleChk && pbad.jinglePeepReact !== undefined && (!pbJingleChk._lastUserToggle || Date.now() - pbJingleChk._lastUserToggle > 1500)) {
             pbJingleChk.checked = !!pbad.jinglePeepReact;
+        }
+    }
+
+    // Booster AutoDrive Live-Status Rendering
+    if (data.boosterAutoDrive) {
+        const bad = data.boosterAutoDrive;
+        const btn = document.getElementById('btnBoosterAutoDriveToggle');
+        const led = document.getElementById('adBoosterLed');
+        const lbl = document.getElementById('adBoosterBtnLabel');
+        const phaseTxt = document.getElementById('adBoosterPhaseText');
+        const badge = document.getElementById('adBoosterTimerBadge');
+        if (phaseTxt) {
+            phaseTxt.textContent = bad.phase || 'BEREIT';
+            phaseTxt.style.color = bad.running ? '#22c55e' : '#fb923c';
+        }
+        if (badge) {
+            badge.textContent = bad.timeFormatted || '0:00';
+            badge.style.color = bad.running ? '#fb923c' : '#fff';
+        }
+        if (btn) {
+            btn.classList.toggle('active', !!bad.running);
+            if (bad.running) {
+                btn.style.borderColor = '#ef4444';
+                if (lbl) lbl.textContent = 'ABBRECHEN';
+                if (led) { led.style.background = '#ef4444'; led.style.boxShadow = '0 0 8px #ef4444'; }
+            } else {
+                btn.style.borderColor = '#f97316';
+                if (lbl) lbl.textContent = 'STARTEN';
+                if (led) { led.style.background = ''; led.style.boxShadow = ''; }
+            }
+        }
+    }
+
+    // Sound Express Telemetry & AutoDrive Rendering
+    if (tel.soundExpress) {
+        const se = tel.soundExpress;
+        const setToggleBtn = (id, active) => document.getElementById(id)?.classList.toggle('active', !!active);
+        setToggleBtn('btnSeEngine', se.engineOn && se.rideOn);
+        setToggleBtn('btnSeDispatch', se.dispatchOn);
+        setToggleBtn('btnSoundExpressEngineOnly', se.engineOn);
+        setToggleBtn('btnSoundExpressRideOnly', se.rideOn);
+        setToggleBtn('btnSoundExpressDir', se.direction === 1);
+        setToggleBtn('btnSoundExpressAdv', se.advancedOn);
+        setToggleBtn('btnSoundExpressSiren', se.sirenOn);
+        setToggleBtn('btnSoundExpressEStop', se.eStop);
+
+        setText('lblSoundExpressDir', (se.direction === 1) ? 'RICHTUNG: RÜCKWÄRTS' : 'RICHTUNG: VORWÄRTS');
+
+        const speedPct = Math.round((se.potiVal || 0) * 100);
+        setText('valSoundExpressSpeed', `${speedPct}%`);
+        const seFader = document.getElementById('faderSoundExpressSpeed');
+        if (seFader && document.activeElement !== seFader) {
+            seFader.value = speedPct;
+        }
+
+        document.getElementById('statSeBooted')?.classList.toggle('active', !!se.booted);
+        document.getElementById('statSeDispatched')?.classList.toggle('active', !!se.dispatched);
+        document.getElementById('statSeHarnessClosed')?.classList.toggle('active', !!se.harnessClosed);
+
+        const occ = se.occupiedSeats || 0;
+        const tot = se.totalSeats || 0;
+        const liveSpd = Math.round((se.speedPercent || 0) * 100);
+        setText('seSeatsSummary', `SITZPLÄTZE (${occ}/${tot}) • ${liveSpd}%`);
+        if (Array.isArray(se.seats)) {
+            renderSoundExpressSeats(se.seats);
+        }
+    }
+
+    if (data.soundExpressAutoDrive) {
+        const sead = data.soundExpressAutoDrive;
+        setText('adSeTimerBadge', sead.timeFormatted || '0:00');
+        setText('adSePhaseText', sead.phase || 'BEREIT');
+
+        const btn = document.getElementById('btnSeAutoDriveToggle');
+        const lbl = document.getElementById('adSeBtnLabel');
+        const led = document.getElementById('adSeLed');
+        if (btn) {
+            btn.classList.toggle('active', !!sead.running);
+            if (sead.running) {
+                btn.style.borderColor = '#ef4444';
+                if (lbl) lbl.textContent = 'ABBRECHEN';
+                if (led) { led.style.background = '#ef4444'; led.style.boxShadow = '0 0 8px #ef4444'; }
+            } else {
+                btn.style.borderColor = '#38bdf8';
+                if (lbl) lbl.textContent = 'STARTEN';
+                if (led) { led.style.background = ''; led.style.boxShadow = ''; }
+            }
+        }
+        const tourSel = document.getElementById('adSeTourSelect');
+        if (tourSel && document.activeElement !== tourSel && sead.tourIndex !== undefined) {
+            tourSel.value = String(sead.tourIndex);
+        }
+        const durSel = document.getElementById('adSeDurationSelect');
+        if (durSel && document.activeElement !== durSel && sead.durationMin) {
+            durSel.value = String(sead.durationMin);
+        }
+        const pauseSel = document.getElementById('adSePauseSelect');
+        if (pauseSel && document.activeElement !== pauseSel && sead.pauseSec) {
+            pauseSel.value = String(sead.pauseSec);
+        }
+        const loopChk = document.getElementById('adSeLoopCheck');
+        if (loopChk && document.activeElement !== loopChk) {
+            loopChk.checked = !!sead.loop;
         }
     }
 
@@ -2291,6 +2430,238 @@ async function togglePinballAutoDrive() {
 }
 window.togglePinballAutoDrive = togglePinballAutoDrive;
 window.updatePinballAutoDriveConfig = updatePinballAutoDriveConfig;
+
+async function forceStartPinballAutoDrive() {
+    const tour = parseInt(document.getElementById('adPinballTourSelect')?.value) || 0;
+    const loop = document.getElementById('adPinballLoopCheck')?.checked || false;
+    const pauseSec = parseInt(document.getElementById('adPinballPauseSelect')?.value) || 45;
+    const durationMin = parseInt(document.getElementById('adPinballDurationSelect')?.value) || 3;
+    const jinglePeepReact = document.getElementById('adPinballJingleReactCheck')?.checked ?? true;
+    try {
+        const res = await fetch('/api/pinball-autodrive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'force_start', tour, loop, pauseSec, durationMin, jinglePeepReact })
+        });
+        const result = await res.json();
+        if (result && result.blocked) {
+            alert(result.reason || 'Du sitzt im Spiel nicht am Flipper (Pinball)-Pult!');
+        }
+    } catch (e) {
+        console.error('Fehler beim Sofort-Start von Pinball AutoDrive:', e);
+    }
+}
+window.forceStartPinballAutoDrive = forceStartPinballAutoDrive;
+
+async function updateBoosterAutoDriveConfig() {
+    const loop = document.getElementById('adBoosterLoopCheck')?.checked || false;
+    const pauseSec = parseInt(document.getElementById('adBoosterPauseSelect')?.value) || 30;
+    const durationMin = parseInt(document.getElementById('adBoosterDurationSelect')?.value) || 3;
+    try {
+        await fetch('/api/booster-autodrive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'config', loop, pauseSec, durationMin })
+        });
+    } catch (e) {}
+}
+
+async function toggleBoosterAutoDrive() {
+    const isRunning = document.getElementById('btnBoosterAutoDriveToggle')?.classList.contains('active');
+    if (isRunning) {
+        await fetch('/api/booster-autodrive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'stop' })
+        }).catch(() => {});
+        return;
+    }
+    const tour = parseInt(document.getElementById('adBoosterTourSelect')?.value) || 0;
+    const loop = document.getElementById('adBoosterLoopCheck')?.checked || false;
+    const pauseSec = parseInt(document.getElementById('adBoosterPauseSelect')?.value) || 30;
+    const durationMin = parseInt(document.getElementById('adBoosterDurationSelect')?.value) || 3;
+    try {
+        const res = await fetch('/api/booster-autodrive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'start', tour, loop, pauseSec, durationMin })
+        });
+        const result = await res.json();
+        if (result && result.blocked) {
+            alert(result.reason || 'Du sitzt im Spiel nicht am Booster (Turaka)-Pult!');
+        }
+    } catch (e) {}
+}
+
+async function forceStartBoosterAutoDrive() {
+    const tour = parseInt(document.getElementById('adBoosterTourSelect')?.value) || 0;
+    const loop = document.getElementById('adBoosterLoopCheck')?.checked || false;
+    const pauseSec = parseInt(document.getElementById('adBoosterPauseSelect')?.value) || 30;
+    const durationMin = parseInt(document.getElementById('adBoosterDurationSelect')?.value) || 3;
+    try {
+        const res = await fetch('/api/booster-autodrive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'force_start', tour, loop, pauseSec, durationMin })
+        });
+        const result = await res.json();
+        if (result && result.blocked) {
+            alert(result.reason || 'Du sitzt im Spiel nicht am Booster (Turaka)-Pult!');
+        }
+    } catch (e) {}
+}
+window.updateBoosterAutoDriveConfig = updateBoosterAutoDriveConfig;
+window.toggleBoosterAutoDrive = toggleBoosterAutoDrive;
+window.forceStartBoosterAutoDrive = forceStartBoosterAutoDrive;
+
+// --- Sound Express Steuerung & AutoDrive ---
+let _seSpeedTimeout = null;
+function sendSoundExpressSpeed(val) {
+    const pct = Math.max(0, Math.min(100, parseInt(val, 10) || 0));
+    setText('valSoundExpressSpeed', `${pct}%`);
+    clearTimeout(_seSpeedTimeout);
+    _seSpeedTimeout = setTimeout(() => {
+        sendCmd({ setSoundExpressSpeed: pct / 100 });
+    }, 35);
+}
+
+function setSoundExpressSpeedPreset(pct) {
+    const val = Math.max(0, Math.min(100, parseInt(pct, 10) || 0));
+    const fader = document.getElementById('faderSoundExpressSpeed');
+    if (fader) fader.value = val;
+    setText('valSoundExpressSpeed', `${val}%`);
+    sendCmd({ setSoundExpressSpeed: val / 100 });
+}
+
+function toggleSoundExpressEngineRide() {
+    const se = (currentState && currentState.telemetry && currentState.telemetry.soundExpress) || {};
+    const next = !(se.engineOn && se.rideOn);
+    sendCmd({ setSoundExpressEngine: next, setSoundExpressRide: next });
+}
+
+async function updateSoundExpressAutoDriveConfig() {
+    const tour = parseInt(document.getElementById('adSeTourSelect')?.value, 10) || 0;
+    const loop = document.getElementById('adSeLoopCheck')?.checked || false;
+    const pauseSec = parseInt(document.getElementById('adSePauseSelect')?.value, 10) || 30;
+    const durationMin = parseInt(document.getElementById('adSeDurationSelect')?.value, 10) || 3;
+    try {
+        await fetch('/api/soundexpress-autodrive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'config', tour, loop, pauseSec, durationMin })
+        });
+    } catch (e) {}
+}
+
+async function toggleSoundExpressAutoDrive() {
+    const isRunning = !!(currentState && currentState.soundExpressAutoDrive && currentState.soundExpressAutoDrive.running);
+    const tour = parseInt(document.getElementById('adSeTourSelect')?.value, 10) || 0;
+    const loop = document.getElementById('adSeLoopCheck')?.checked || false;
+    const pauseSec = parseInt(document.getElementById('adSePauseSelect')?.value, 10) || 30;
+    const durationMin = parseInt(document.getElementById('adSeDurationSelect')?.value, 10) || 3;
+    try {
+        const res = await fetch('/api/soundexpress-autodrive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: isRunning ? 'stop' : 'start',
+                tour,
+                loop,
+                pauseSec,
+                durationMin
+            })
+        });
+        const result = await res.json();
+        if (result && result.blocked) {
+            alert(result.reason || 'Du sitzt im Spiel nicht am Sound Express-Pult!');
+        }
+    } catch (e) {}
+}
+
+async function forceStartSoundExpressAutoDrive() {
+    const tour = parseInt(document.getElementById('adSeTourSelect')?.value, 10) || 0;
+    const loop = document.getElementById('adSeLoopCheck')?.checked || false;
+    const pauseSec = parseInt(document.getElementById('adSePauseSelect')?.value, 10) || 30;
+    const durationMin = parseInt(document.getElementById('adSeDurationSelect')?.value, 10) || 3;
+    try {
+        const res = await fetch('/api/soundexpress-autodrive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'force_start',
+                tour,
+                loop,
+                pauseSec,
+                durationMin
+            })
+        });
+        const result = await res.json();
+        if (result && result.blocked) {
+            alert(result.reason || 'Du sitzt im Spiel nicht am Sound Express-Pult!');
+        }
+    } catch (e) {}
+}
+
+let lastSeSeatState = '';
+function renderSoundExpressSeats(seats) {
+    const grid = document.getElementById('seSeatsGrid');
+    if (!grid) return;
+
+    const stateKey = seats.map(s => `${s.id}:${s.closed ? 1 : 0}:${s.occupied ? 1 : 0}`).join('|');
+    if (stateKey === lastSeSeatState && grid.children.length > 0) return;
+
+    // Schnell-Update wenn sich nur Status ändert, Anzahl gleich bleibt
+    if (grid.children.length > 0 && grid.querySelectorAll('.gondola-node').length === seats.length) {
+        lastSeSeatState = stateKey;
+        seats.forEach(s => {
+            const node = document.getElementById(`se_seat_node_${s.id}`);
+            if (node) {
+                node.className = 'gondola-node ' + (s.occupied ? (s.closed ? 'safe' : 'danger') : 'empty');
+                node.title = `Sitz ${s.id}: ${s.occupied ? 'Besetzt' : 'Frei'} | Bügel: ${s.closed ? 'ZU' : 'OFFEN'}`;
+            }
+        });
+        return;
+    }
+
+    lastSeSeatState = stateKey;
+    grid.innerHTML = '';
+
+    // Gruppieren in Chaisen-Blöcke à 10 Sitze (oder 4 Gruppen) für sauberes Grid
+    const total = seats.length;
+    const groupSize = total >= 20 ? Math.ceil(total / 4) : Math.max(1, Math.ceil(total / 2));
+    for (let g = 0; g < total; g += groupSize) {
+        const chunk = seats.slice(g, g + groupSize);
+        const box = document.createElement('div');
+        box.className = 'cross-box';
+
+        const title = document.createElement('div');
+        title.className = 'cross-title';
+        title.textContent = `PLATZ ${g + 1}–${g + chunk.length}`;
+        box.appendChild(title);
+
+        const row = document.createElement('div');
+        row.className = 'cross-gondolas';
+
+        chunk.forEach(s => {
+            const node = document.createElement('div');
+            node.id = `se_seat_node_${s.id}`;
+            node.className = 'gondola-node ' + (s.occupied ? (s.closed ? 'safe' : 'danger') : 'empty');
+            node.textContent = s.id;
+            node.title = `Sitz ${s.id}: ${s.occupied ? 'Besetzt' : 'Frei'} | Bügel: ${s.closed ? 'ZU' : 'OFFEN'}`;
+            row.appendChild(node);
+        });
+
+        box.appendChild(row);
+        grid.appendChild(box);
+    }
+}
+
+window.sendSoundExpressSpeed = sendSoundExpressSpeed;
+window.setSoundExpressSpeedPreset = setSoundExpressSpeedPreset;
+window.toggleSoundExpressEngineRide = toggleSoundExpressEngineRide;
+window.updateSoundExpressAutoDriveConfig = updateSoundExpressAutoDriveConfig;
+window.toggleSoundExpressAutoDrive = toggleSoundExpressAutoDrive;
+window.forceStartSoundExpressAutoDrive = forceStartSoundExpressAutoDrive;
 
 // --- GitHub Update-Checker fuer Fairground-Online-Telemetry ---
 (async function checkTelemetryModUpdate() {
