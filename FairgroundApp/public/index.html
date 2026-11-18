@@ -1,0 +1,1473 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MegaDance Master Console — Operator Desk</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css?v=8">
+</head>
+<body class="operator-hmi desk-locked">
+
+    <!-- ======================================================================
+         1. TOP SPS & TELEMETRY HEADER
+         ====================================================================== -->
+    <header class="master-header">
+        <div class="header-left">
+            <div class="hmi-badge">
+                <span class="plc-indicator online" id="connStatus"></span>
+                <div>
+                    <!-- Fahrgeschäft Umschalter -->
+                    <div class="ride-selector-tabs">
+                        <button class="ride-tab-btn active" id="tabRideMD" onclick="switchActiveRide('megadance')">MEGADANCE</button>
+                        <button class="ride-tab-btn" id="tabRideBooster" onclick="switchActiveRide('booster')">BOOSTER</button>
+                        <button class="ride-tab-btn" id="tabRideXplosion" onclick="switchActiveRide('xplosion')">XPLOSION</button>
+                        <button class="ride-tab-btn" id="tabRidePinball" onclick="switchActiveRide('pinball')">🎱 FLIPPER</button>
+                        <a href="dj.html" class="ride-tab-btn" id="tabRideDJ" style="text-decoration: none; display: inline-flex; align-items: center; color: inherit;">🎧 DJ STAGE</a>
+                    </div>
+                    <span class="hmi-sub" id="rideDeskSub">LEITSTAND / OPERATOR DESK</span>
+                </div>
+            </div>
+            <div class="mode-badge locked" id="mdStatusBadge">PULT UNBESETZT</div>
+        </div>
+
+        <div class="header-center">
+            <!-- Digital StopWatch / Ride Timer -->
+            <div class="master-timer" id="masterTimerBox">
+                <div class="timer-col">
+                    <span class="timer-lbl">FAHRZEIT</span>
+                    <div class="timer-digits" id="stopwatchDisplay">00:00</div>
+                </div>
+                <div class="timer-badges">
+                    <span class="timer-state" id="stopwatchState">STOP</span>
+                    <span class="timer-overtime" id="overtimeBadge" style="display: none;">+00:00 ÜBERZEIT</span>
+                </div>
+            </div>
+            <!-- In-game World Time & Date & Weather (mit Klick/Hover Schnellsteuerung für Host) -->
+            <div class="world-clock" id="worldClockWidget" onclick="toggleEnvModal()" style="cursor: pointer;" title="Klicken: Uhrzeit & Wetter Steuerung öffnen">
+                <div class="clock-col">
+                    <span class="clock-lbl">KIRMESZEIT ⚙️</span>
+                    <div class="clock-digits" id="worldTimeVal">--:--</div>
+                </div>
+                <div class="clock-extra">
+                    <span class="clock-date" id="worldDateVal">--.--.----</span>
+                    <span class="clock-weather" id="worldWeatherVal">☀️ SONNIG</span>
+                </div>
+            </div>
+            <!-- Now Playing Track Badge in Header -->
+            <div class="header-track-box">
+                <span class="track-lbl">🎵 JINGLE / TRACK</span>
+                <div class="track-title-ticker" id="headerMusicTitle">Keine Musik aktiv</div>
+            </div>
+        </div>
+
+        <div class="header-right">
+            <!-- Operator & Staff Status -->
+            <div class="operator-box">
+                <span class="op-lbl">BEDIENER / OPERATOR</span>
+                <div class="op-val" id="operatorNameVal">--</div>
+                <span class="op-role-badge" id="operatorRoleBadge">UNBESETZT</span>
+            </div>
+
+            <!-- Master Safety All-Ready Signal -->
+            <div class="all-ready-box not-ready" id="allReadyBox">
+                <span class="ready-icon" id="readyIcon">⚠️</span>
+                <div class="ready-content">
+                    <span class="ready-status" id="readyStatusText">BÜGEL KONTROLLE</span>
+                    <span class="ready-sub" id="readySubText">24 Gondeln prüfen</span>
+                </div>
+            </div>
+
+            <!-- Harness Safety Light & Seat Meter -->
+            <div class="safety-module">
+                <div class="safety-indicator" id="harnessSafetyPill">
+                    <span class="safety-lamp" id="safetyLamp"></span>
+                    <span class="safety-text" id="safetyText">BÜGEL: --</span>
+                </div>
+                <div class="seat-gauge">
+                    <span class="seat-gauge-text" id="occDetailVal">-- Sitze</span>
+                    <div class="gauge-bar"><div class="gauge-fill" id="occBarFill" style="width: 0%;"></div></div>
+                    <span class="gauge-pct" id="occPctVal">0%</span>
+                </div>
+            </div>
+
+            <!-- Hilfe / Handbuch Button (Öffnet eigene Seite) -->
+            <a href="help.html" target="_blank" class="help-header-btn" id="btnOpenHelpPage" title="Handbuch & Funktionsübersicht öffnen">❓</a>
+        </div>
+    </header>
+
+    <!-- ======================================================================
+         2. MASTER ALL-IN-ONE OPERATOR WORKSPACE (NO TABS!)
+         ====================================================================== -->
+    <!-- OPERATOR LOCK OVERLAY / BANNER -->
+    <div id="operatorLockOverlay" class="operator-lock-overlay" style="display: none;">
+        <div class="lock-modal-card">
+            <div class="lock-icon-pulse">🔒</div>
+            <div class="lock-title">PULT AKTUELL UNBESETZT</div>
+            <div class="lock-sub">
+                Bitte im Spiel zum Fahrpult gehen und <strong>Platz nehmen</strong> (Eingeloggt als Operator), um die Fahr- & Bügelsteuerung freizuschalten.
+            </div>
+            <div class="lock-hint">
+                <span>🛡️ Not-Aus & Host-Funktionen (Wetter/Zeit) bleiben jederzeit aktiv</span>
+            </div>
+        </div>
+    </div>
+
+    <main class="console-body">
+
+        <!-- COLUMN 1: PULT-ZENTRALE & SICHERHEIT (LINKS) -->
+        <section class="console-col col-center">
+            <!-- MEGADANCE LEFT PANEL -->
+            <div id="leftViewMegaDance">
+                <div class="col-header">
+                    <span class="col-tag">CONTROL</span>
+                    <h3>PULT-ZENTRALE & SICHERHEIT</h3>
+                </div>
+
+                <!-- Bügel Großbedienung -->
+                <div class="harness-cluster">
+                    <button class="harness-btn btn-harness-close" onclick="sendCmd({ harnessClose: true })">
+                        <span class="btn-icon">🔒</span>
+                        <span class="harness-lbl">BÜGEL SCHLIESSEN</span>
+                        <span class="harness-sub">24 GONDELN VERRIEGELN</span>
+                    </button>
+                    <button class="harness-btn btn-harness-open" onclick="sendCmd({ harnessOpen: true })">
+                        <span class="btn-icon">🔓</span>
+                        <span class="harness-lbl">BÜGEL ÖFFNEN</span>
+                        <span class="harness-sub">FREIGABE ZUM AUSSTEIGEN</span>
+                    </button>
+                </div>
+
+                <!-- Tasten Antriebe & Funktionen -->
+                <div class="center-buttons-grid">
+                    <button class="pult-btn toggle-btn" id="btnPkTip" onclick="togglePkTip()"
+                            title="1x Drücken = Vorrücken AN, nochmal Drücken = AUS">
+                        <span class="btn-led" id="pkTipLed"></span>
+                        <span class="btn-text">VORRÜCKEN (P+K TIP)</span>
+                    </button>
+                    <button class="pult-btn toggle-btn" id="btnCrossReverse" onclick="toggleCmd('setCrossReverse')">
+                        <span class="btn-led"></span>
+                        <span class="btn-text">KREUZ REVERSE</span>
+                    </button>
+                    <button class="pult-btn toggle-btn" id="btnGondelbremse" onclick="toggleCmd('setGondelbremse')">
+                        <span class="btn-led"></span>
+                        <span class="btn-text">GONDELBREMSE</span>
+                    </button>
+                    <button class="pult-btn toggle-btn" id="btnMotorPlate" onclick="toggleCmd('setMotorPlateOn')">
+                        <span class="btn-led"></span>
+                        <span class="btn-text">MOTOR PLATTE</span>
+                    </button>
+                    <button class="pult-btn toggle-btn" id="btnMotorCross" onclick="toggleCmd('setMotorCrossOn')">
+                        <span class="btn-led"></span>
+                        <span class="btn-text">MOTOR KREUZ</span>
+                    </button>
+                </div>
+
+
+                <!-- AUTODRIVE STEUERUNG & LIVE-PHASEN ANZEIGE -->
+                <div class="autodrive-card" style="margin-top: 10px; background: #18181b; border: 2px solid #3f3f46; border-radius: 8px; padding: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #27272a; padding-bottom: 8px; margin-bottom: 10px;">
+                        <span style="font-family: var(--font-mono); font-weight: 900; font-size: 0.85rem; color: #f59e0b; letter-spacing: 1px;">🏎️ AUTODRIVE FAHRPROGRAMM</span>
+                        <span id="adTimerBadge" style="background: #27272a; color: #fff; font-family: var(--font-mono); font-weight: 900; font-size: 0.85rem; padding: 2px 8px; border-radius: 4px;">0:00</span>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 8px;">
+                        <select id="adTourSelect" style="background: #09090b; color: #e4e4e7; border: 1px solid #3f3f46; border-radius: 4px; padding: 6px 8px; font-family: var(--font-mono); font-size: 0.8rem;">
+                            <option value="0">Tour 1: Klassiker (Harmonisch)</option>
+                            <option value="1">Tour 2: Reko-Drift (Katapult)</option>
+                            <option value="2">Tour 3: Turbo-Power (Druck)</option>
+                            <option value="3">Tour 4: Katapult (Drops)</option>
+                            <option value="4">Tour 5: Showdown (Festival)</option>
+                            <option value="5">Tour 6: Freitag Abend Party</option>
+                            <option value="6">Tour 7: Freitag Abend Party (Variabel)</option>
+                            <option value="7">Tour 8: Samstag Abend Premium Party</option>
+                            <option value="8">Tour 🎲: Zufallstour</option>
+                        </select>
+                        <select id="adDurationSelect" onchange="updateAutoDriveConfig()" style="background: #09090b; color: #f59e0b; border: 1px solid #3f3f46; border-radius: 4px; padding: 3px 6px; font-family: var(--font-mono); font-size: 0.75rem; font-weight: bold;">
+                            <option value="1">1 Min</option>
+                            <option value="2">2 Min</option>
+                            <option value="3">3 Min</option>
+                            <option value="4" selected>4 Min</option>
+                            <option value="5">5 Min</option>
+                            <option value="6">6 Min</option>
+                        </select>
+                    </div>
+
+                    <!-- Auto-Loop (Automodus) & Pausen-Timer -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; background: #09090b; border: 1px solid #27272a; border-radius: 4px; padding: 6px 10px;">
+                        <label style="display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 0.75rem; color: #e4e4e7; cursor: pointer; font-weight: bold;">
+                            <input type="checkbox" id="adLoopCheck" onchange="updateAutoDriveConfig()" style="accent-color: #22c55e; width: 16px; height: 16px;">
+                            🔁 AUTOMODUS (ENDLOS)
+                        </label>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-family: var(--font-mono); font-size: 0.7rem; color: #a1a1aa;">PAUSE:</span>
+                            <select id="adPauseSelect" onchange="updateAutoDriveConfig()" style="background: #18181b; color: #f59e0b; border: 1px solid #3f3f46; border-radius: 4px; padding: 3px 6px; font-family: var(--font-mono); font-size: 0.75rem; font-weight: bold;">
+                                <option value="15">15 Sek</option>
+                                <option value="30">30 Sek</option>
+                                <option value="45">45 Sek</option>
+                                <option value="60" selected>60 Sek (1 Min)</option>
+                                <option value="90">90 Sek</option>
+                                <option value="120">120 Sek (2 Min)</option>
+                                <option value="180">180 Sek (3 Min)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Zusatzhaken: NPC-Reaktion auf Jingles (bei AutoDrive) + Menü-Button -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 4px; padding: 6px 10px;">
+                        <label style="display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 0.73rem; color: #38bdf8; cursor: pointer; font-weight: bold;" title="Wenn aktiv, reagieren die Besucher im Fahrgeschäft während AutoDrive automatisch auf deine selbst abgespielten Jingles!">
+                            <input type="checkbox" id="adJingleReactCheck" checked onchange="updateAutoDriveConfig()" style="accent-color: #38bdf8; width: 16px; height: 16px;">
+                            🔊 JINGLE ➔ NPC-REAKTION
+                        </label>
+                        <button type="button" id="btnOpenJingleModal" onclick="openJingleModal()" style="background: #1e293b; color: #38bdf8; border: 1px solid #0284c7; border-radius: 4px; padding: 4px 8px; font-family: var(--font-mono); font-size: 0.7rem; font-weight: bold; cursor: pointer;">
+                            🎵 JINGLES EINSTELLEN
+                        </button>
+                    </div>
+
+                    <!-- Live Phasen & Start/Stopp Button -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: center;">
+                        <div style="background: #09090b; border: 1px solid #27272a; border-radius: 4px; padding: 6px 10px; text-align: center;">
+                            <div style="font-size: 0.65rem; color: #71717a; font-family: var(--font-mono); font-weight: bold;">REKO-PHASE</div>
+                            <div id="adPhaseText" style="font-family: var(--font-mono); font-weight: 900; font-size: 0.95rem; color: #38bdf8; letter-spacing: 1px;">BEREIT</div>
+                        </div>
+
+                        <button id="btnAutoDriveToggle" class="pult-btn full-btn" style="height: 100%; padding: 8px; font-weight: 900;" onclick="toggleAutoDrive()">
+                            <span class="btn-led" id="adLed"></span>
+                            <span id="adBtnLabel">STARTEN</span>
+                        </button>
+                    </div>
+                </div>
+
+
+                <!-- Gondel-Zustand (Swing & Safety Telemetrie) -->
+                <div class="gondola-status-panel">
+                    <div class="gondola-stat-item" id="statInSwinging">
+                        <span class="stat-dot"></span>
+                        <span class="stat-text">GONDELN SCHWINGEN</span>
+                    </div>
+                    <div class="gondola-stat-item" id="statAllStand">
+                        <span class="stat-dot"></span>
+                        <span class="stat-text">GONDELN STILLSTAND</span>
+                    </div>
+                    <div class="gondola-stat-item" id="statAllOnZero">
+                        <span class="stat-dot"></span>
+                        <span class="stat-text">NULL-POSITION (GERADE)</span>
+                    </div>
+                </div>
+
+                <!-- Interaktiver 24-Gondeln Sicherheits- & Belegungsplan -->
+                <div class="gondola-matrix-card">
+                    <div class="gondola-matrix-header">
+                        <span>24 GONDELN SICHERHEITSPLAN</span>
+                        <span class="gondola-matrix-legend">
+                            <span class="leg-item"><span class="leg-dot safe"></span>BESETZT & ZU</span>
+                            <span class="leg-item"><span class="leg-dot warn"></span>OFFEN!</span>
+                            <span class="leg-item"><span class="leg-dot empty"></span>LEER</span>
+                        </span>
+                    </div>
+                    <div class="gondola-crosses-grid" id="gondolaCrossesGrid">
+                        <!-- 4 Gondelkreuze mit je 6 Gondeln dynamisch gerendert -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- BOOSTER LEFT PANEL -->
+            <div id="leftViewBooster" style="display: none;">
+                <div class="col-header">
+                    <span class="col-tag">BOOSTER SAFETY</span>
+                    <h3>PODIUM & SICHERHEIT</h3>
+                </div>
+
+                <!-- Podium / Einstiegsbühne Hebewerk -->
+                <div class="harness-cluster">
+                    <button class="harness-btn btn-harness-close" onclick="sendCmd({ boosterPodium: false })">
+                        <span class="btn-icon">⬇️</span>
+                        <span class="harness-lbl">PODIUM SENKEN</span>
+                        <span class="harness-sub">BÜHNE ABWÄRTS (FAHRT FREI)</span>
+                    </button>
+                    <button class="harness-btn btn-harness-open" onclick="sendCmd({ boosterPodium: true })">
+                        <span class="btn-icon">⬆️</span>
+                        <span class="harness-lbl">PODIUM HEBEN</span>
+                        <span class="harness-sub">BÜHNE AUFWÄRTS (EINSTIEG)</span>
+                    </button>
+                </div>
+
+                <!-- Druckluftpistole & Anlage Hauptschalter -->
+                <div class="center-buttons-grid">
+                    <button class="pult-btn toggle-btn" id="btnBoosterPower" onclick="toggleCmd('setBoosterPower')">
+                        <span class="btn-led"></span>
+                        <span class="btn-text">HAUPTSCHALTER</span>
+                    </button>
+                    <button class="pult-btn toggle-btn" id="btnBoosterAirPistole" onclick="toggleCmd('setBoosterAirPistole')">
+                        <span class="btn-led"></span>
+                        <span class="btn-text">DRUCKLUFT PISTOLE</span>
+                    </button>
+                </div>
+
+                <!-- Booster 2 Gondeln Interaktiver Sicherheitsplan (8 Sitze pro Gondel = 16 Sitze) -->
+                <div class="gondola-matrix-card">
+                    <div class="gondola-matrix-header">
+                        <span>BOOSTER SICHERHEITSPLAN (16 SITZE)</span>
+                        <span class="gondola-matrix-legend">
+                            <span class="leg-item"><span class="leg-dot safe"></span>ZU</span>
+                            <span class="leg-item"><span class="leg-dot warn"></span>OFFEN</span>
+                        </span>
+                    </div>
+                    <div class="booster-gondolas-grid">
+                        <div class="booster-gondola-box" id="bBoxG1">
+                            <div class="bg-title-row">
+                                <span class="bg-name">GONDEL 1 (UNTEN)</span>
+                                <span class="bg-badge" id="bBadgeG1">OFFEN</span>
+                            </div>
+                            <div class="bg-seats-visual" id="bSeatsG1">
+                                <!-- 8 Sitze Gondel 1 -->
+                                <span class="b-seat">01</span><span class="b-seat">02</span><span class="b-seat">03</span><span class="b-seat">04</span>
+                                <span class="b-seat">05</span><span class="b-seat">06</span><span class="b-seat">07</span><span class="b-seat">08</span>
+                            </div>
+                        </div>
+                        <div class="booster-gondola-box" id="bBoxG2">
+                            <div class="bg-title-row">
+                                <span class="bg-name">GONDEL 2 (OBEN)</span>
+                                <span class="bg-badge" id="bBadgeG2">OFFEN</span>
+                            </div>
+                            <div class="bg-seats-visual" id="bSeatsG2">
+                                <!-- 8 Sitze Gondel 2 -->
+                                <span class="b-seat">09</span><span class="b-seat">10</span><span class="b-seat">11</span><span class="b-seat">12</span>
+                                <span class="b-seat">13</span><span class="b-seat">14</span><span class="b-seat">15</span><span class="b-seat">16</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- XPLOSION LEFT PANEL -->
+            <div id="leftViewXplosion" style="display: none;">
+                <div class="col-header">
+                    <span class="col-tag">XPLOSION 50M</span>
+                    <h3>BUNGEE LEITSTAND & SICHERHEIT</h3>
+                </div>
+
+                <!-- Schlüssel & System-Reset -->
+                <div class="center-buttons-grid" style="margin-bottom: 12px;">
+                    <button class="pult-btn toggle-btn" id="btnXplosionPower" onclick="toggleCmd('setXplosionPower')">
+                        <span class="btn-led"></span>
+                        <span class="btn-text">SCHLÜSSELSCHALTER</span>
+                    </button>
+                    <button class="pult-btn full-btn" id="btnXplosionReset" onclick="sendCmd({ setXplosionReset: true })">
+                        <span>🔄 SYSTEM RESET</span>
+                    </button>
+                </div>
+
+                <!-- Bügel Hinweis (NPC-Steuerung im Spiel) -->
+                <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; font-family: var(--font-mono); font-size: 0.72rem; color: #cbd5e1; display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 1rem;">👷</span>
+                    <span><strong>BÜGEL-AUTOMATIK:</strong> Der NPC-Mitarbeiter am Einstieg schließt die Bügel nach <strong>Signalhorn (📢)</strong> und öffnet sie unten automatisch.</span>
+                </div>
+
+                <!-- 2-Sitzer Kugelgondel Interaktive Sitzbelegung -->
+                <div class="xplosion-actions-card">
+                    <div class="xplosion-card-title">
+                        <span>👥</span> 2-SITZER KUGELGONDEL
+                    </div>
+                    <div class="xplosion-seats-cluster">
+                        <div class="xplosion-seat-box" id="hsSeatBox1">
+                            <span class="xplosion-seat-icon">💺</span>
+                            <span class="xplosion-seat-lbl">SITZ 1 (LINKS)</span>
+                            <span class="xplosion-seat-status" id="hsSeatStat1">OFFEN</span>
+                        </div>
+                        <div class="xplosion-seat-box" id="hsSeatBox2">
+                            <span class="xplosion-seat-icon">💺</span>
+                            <span class="xplosion-seat-lbl">SITZ 2 (RECHTS)</span>
+                            <span class="xplosion-seat-status" id="hsSeatStat2">OFFEN</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Seilzug & Gondel-Status Live-Telemetrie -->
+                <div class="xplosion-actions-card">
+                    <div class="xplosion-card-title" style="justify-content: space-between;">
+                        <span><span>⚙️</span> TELEMETRIE SEILZUG</span>
+                        <span class="bg-badge" id="badgeXplosionReady">STANDBY</span>
+                    </div>
+                    <div class="xplosion-gauge-cluster" style="grid-template-columns: 1fr;">
+                        <div class="xplosion-meter-box">
+                            <div class="xplosion-meter-head">
+                                <span>SEILSPANNUNG (BUNGEE-SEILE)</span>
+                                <span class="xplosion-meter-num" id="xplosionTensionVal">0%</span>
+                            </div>
+                            <div class="xplosion-bar-track">
+                                <div class="xplosion-bar-fill" id="xplosionTensionBar"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: #05080f; padding: 8px 12px; border-radius: 6px; border: 1px solid #172033; font-family: var(--font-mono); font-size: 0.75rem;">
+                        <span style="color: #94a3b8;">GONDEL-STATUS:</span>
+                        <strong id="xplosionGondolaPosVal" style="color: #10b981;">UNTEN (EINSTIEG)</strong>
+                    </div>
+                </div>
+
+                <!-- XPLOSION AUTODRIVE (VOLLAUTOMATIK) -->
+                <div class="xplosion-actions-card" style="border-color: #38bdf8; background: linear-gradient(180deg, rgba(56, 189, 248, 0.08) 0%, rgba(9, 14, 23, 0.95) 100%);">
+                    <div class="xplosion-card-title" style="color: #38bdf8; justify-content: space-between;">
+                        <span><span>⚡</span> AUTODRIVE (BUNGEE-AUTOMATIK)</span>
+                        <span id="adXplosionTimer" style="font-family: var(--font-mono); color: #fbbf24; font-size: 0.75rem;">0:00</span>
+                    </div>
+
+                    <!-- Optionen: Loop & Flugzeit & Smart Sensoren -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 6px; background: #05080f; border: 1px solid #172033; border-radius: 4px; padding: 6px 10px;">
+                        <label style="display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 0.72rem; color: #e2e8f0; cursor: pointer; font-weight: bold;">
+                            <input type="checkbox" id="adXplosionLoopCheck" style="accent-color: #38bdf8; width: 15px; height: 15px;">
+                            🔁 ENDLOS (LOOP)
+                        </label>
+                        <div style="display: flex; align-items: center; gap: 4px;">
+                            <span style="font-family: var(--font-mono); font-size: 0.68rem; color: #94a3b8;">FLUGZEIT:</span>
+                            <select id="adXplosionPauseSelect" style="background: #0f172a; color: #fbbf24; border: 1px solid #334155; border-radius: 4px; padding: 2px 4px; font-family: var(--font-mono); font-size: 0.72rem; font-weight: bold;">
+                                <option value="25">25s (Kurz)</option>
+                                <option value="35" selected>35s (Optimal)</option>
+                                <option value="45">45s (Lang)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Smart Sensoren & Auto Tickets -->
+                    <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 4px; padding: 6px 8px;">
+                        <label style="display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 0.72rem; color: #38bdf8; cursor: pointer; font-weight: bold;">
+                            <input type="checkbox" id="adXplosionSensorsCheck" checked style="accent-color: #38bdf8; width: 14px; height: 14px;">
+                            🎯 SMARTE SENSOREN (Warten bis Gast sitzt & kassiert ist)
+                        </label>
+                        <div style="font-size: 0.65rem; color: #64748b; padding-left: 20px; font-family: var(--font-mono); margin-top: -2px;">
+                            ℹ️ Tickets sammelt der Spieler oder KI-Mitarbeiter im Spiel ein.
+                        </div>
+                        <label style="display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 0.70rem; color: #94a3b8; cursor: pointer; padding-left: 20px; margin-top: 2px;">
+                            <input type="checkbox" id="adXplosionFogCheck" checked style="accent-color: #38bdf8; width: 13px; height: 13px;">
+                            💨 Vor Abschuss SkyShot-Nebel zünden
+                        </label>
+                    </div>
+
+                    <!-- Live Phase & Start/Stopp Button -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: center;">
+                        <div style="background: #05080f; border: 1px solid #172033; border-radius: 4px; padding: 6px 8px; text-align: center;">
+                            <div style="font-size: 0.62rem; color: #64748b; font-family: var(--font-mono); font-weight: bold;">AKTUELLE PHASE</div>
+                            <div id="adXplosionPhaseText" style="font-family: var(--font-mono); font-weight: 900; font-size: 0.85rem; color: #38bdf8;">BEREIT</div>
+                        </div>
+
+                        <button id="btnXplosionAutoDriveToggle" class="pult-btn full-btn" style="height: 100%; padding: 10px 8px; font-weight: 900; background: #0284c7; border-color: #38bdf8;" onclick="toggleXplosionAutoDrive()">
+                            <span class="btn-led" id="adXplosionLed"></span>
+                            <span id="adXplosionBtnLabel">▶️ AUTO START</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PINBALL (FLIPPER) LEFT PANEL -->
+            <div id="leftViewPinball" style="display: none;">
+                <div class="col-header">
+                    <span class="col-tag">HUSS FLIPPER</span>
+                    <h3>PINBALL LEITSTAND & SICHERHEIT</h3>
+                </div>
+
+                <!-- Schlüsselschalter, Steuerung, Pumpe & Reset -->
+                <div class="center-buttons-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 10px;">
+                    <button class="pult-btn toggle-btn" id="btnPinballKey" onclick="toggleCmd('setPinballKey')">
+                        <span class="btn-led"></span>
+                        <span class="btn-text">🔑 SCHLÜSSELSCHALTER</span>
+                    </button>
+                    <button class="pult-btn toggle-btn" id="btnPinballControl" onclick="toggleCmd('setPinballControl')">
+                        <span class="btn-led"></span>
+                        <span class="btn-text">⚡ STEUERUNG EIN</span>
+                    </button>
+                    <button class="pult-btn toggle-btn" id="btnPinballPump" onclick="toggleCmd('setPinballPump')">
+                        <span class="btn-led"></span>
+                        <span class="btn-text">🛢️ HYDRAULIKPUMPE</span>
+                    </button>
+                    <button class="pult-btn full-btn" id="btnPinballReset" onclick="sendCmd({ setPinballReset: true })">
+                        <span>🔄 SYSTEM RESET</span>
+                    </button>
+                </div>
+
+                <!-- Bügel Großbedienung -->
+                <div class="harness-cluster">
+                    <button class="harness-btn btn-harness-close" id="btnPinballHarnessClose" onclick="sendCmd({ setPinballHarness: true })">
+                        <span class="btn-icon">🔒</span>
+                        <span class="harness-lbl">BÜGEL SCHLIESSEN</span>
+                        <span class="harness-sub">12 GONDELN VERRIEGELN</span>
+                    </button>
+                    <button class="harness-btn btn-harness-open" id="btnPinballHarnessOpen" onclick="sendCmd({ setPinballHarness: false })">
+                        <span class="btn-icon">🔓</span>
+                        <span class="harness-lbl">BÜGEL ÖFFNEN</span>
+                        <span class="harness-sub">FREIGABE ZUM AUSSTEIGEN</span>
+                    </button>
+                </div>
+
+                <!-- Gondelbremse & Automatik-Bremse & Freigabe -->
+                <div class="center-buttons-grid" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom: 10px;">
+                    <button class="pult-btn toggle-btn" id="btnPinballBrake" onclick="toggleCmd('setPinballGondolaBrake')">
+                        <span class="btn-led"></span>
+                        <span class="btn-text">🛑 GONDELBREMSE</span>
+                    </button>
+                    <button class="pult-btn toggle-btn" id="btnPinballAutoBrake" onclick="sendCmd({ setPinballAutoBrake: true })">
+                        <span class="btn-led"></span>
+                        <span class="btn-text">🎯 AUTO-BREMSE</span>
+                    </button>
+                    <button class="pult-btn toggle-btn" id="btnPinballDispatch" onclick="sendCmd({ setPinballDispatch: true })" style="border-color: #22c55e;">
+                        <span class="btn-led" id="ledPinballDispatch"></span>
+                        <span class="btn-text">🟢 FREIGABE</span>
+                    </button>
+                </div>
+
+                <!-- PINBALL DISPLAY STATUS-LEDS (SPS DIAGNOSE) -->
+                <div class="gondola-status-panel" style="grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px;">
+                    <div class="gondola-stat-item" id="statPbPotiZero">
+                        <span class="stat-dot"></span>
+                        <span class="stat-text">POTI AUF 0</span>
+                    </div>
+                    <div class="gondola-stat-item" id="statPbPump">
+                        <span class="stat-dot"></span>
+                        <span class="stat-text">PUMPE AN</span>
+                    </div>
+                    <div class="gondola-stat-item" id="statPbHarness">
+                        <span class="stat-dot"></span>
+                        <span class="stat-text">BÜGEL ZU</span>
+                    </div>
+                    <div class="gondola-stat-item" id="statPbRpmUnder">
+                        <span class="stat-dot"></span>
+                        <span class="stat-text">RPM &lt; MAX</span>
+                    </div>
+                    <div class="gondola-stat-item" id="statPbBrakeOpen">
+                        <span class="stat-dot"></span>
+                        <span class="stat-text">BREMSE FREI</span>
+                    </div>
+                    <div class="gondola-stat-item" id="statPbOnZero">
+                        <span class="stat-dot"></span>
+                        <span class="stat-text">PARK-POS (0°)</span>
+                    </div>
+                </div>
+
+                <!-- PINBALL AUTODRIVE STEUERUNG -->
+                <div class="autodrive-card" style="margin-top: 8px; background: #18181b; border: 2px solid #a855f7; border-radius: 8px; padding: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #27272a; padding-bottom: 8px; margin-bottom: 10px;">
+                        <span style="font-family: var(--font-mono); font-weight: 900; font-size: 0.85rem; color: #c084fc; letter-spacing: 1px;">🎱 FLIPPER AUTODRIVE</span>
+                        <span id="adPinballTimerBadge" style="background: #27272a; color: #fff; font-family: var(--font-mono); font-weight: 900; font-size: 0.85rem; padding: 2px 8px; border-radius: 4px;">0:00</span>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 8px;">
+                        <select id="adPinballTourSelect" style="background: #09090b; color: #e4e4e7; border: 1px solid #3f3f46; border-radius: 4px; padding: 6px 8px; font-family: var(--font-mono); font-size: 0.78rem;">
+                            <option value="0" selected>★ ULTIMATE SHOWMAN-MIX (Max Kinetik) ★</option>
+                            <option value="1">Tour 2: SIMON (Meeß Show-Choreo 00:00 - 05:25)</option>
+                            <option value="2">Tour 3: Test 1 (Exakter Ablauf 00:00 - 05:25)</option>
+                            <option value="3">Tour 4: Turbo-Schleuder (Max Hub &amp; Vollgas)</option>
+                            <option value="4">Tour 5: Freitag Abend Party (Show &amp; Beats)</option>
+                            <option value="5">Tour 6: Klassiker (Sanfter Hub &amp; Finale)</option>
+                        </select>
+                        <select id="adPinballDurationSelect" onchange="updatePinballAutoDriveConfig()" style="background: #09090b; color: #c084fc; border: 1px solid #3f3f46; border-radius: 4px; padding: 3px 6px; font-family: var(--font-mono); font-size: 0.75rem; font-weight: bold;">
+                            <option value="2">2 Min</option>
+                            <option value="3">3 Min</option>
+                            <option value="4" selected>4 Min</option>
+                            <option value="5">5 Min</option>
+                        </select>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 4px; padding: 6px 10px;">
+                        <label style="display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 0.75rem; color: #e4e4e7; cursor: pointer; font-weight: bold;">
+                            <input type="checkbox" id="adPinballLoopCheck" onchange="updatePinballAutoDriveConfig()" style="accent-color: #a855f7; width: 16px; height: 16px;">
+                            🔁 AUTOMODUS (ENDLOS)
+                        </label>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-family: var(--font-mono); font-size: 0.7rem; color: #a1a1aa;">PAUSE:</span>
+                            <select id="adPinballPauseSelect" onchange="updatePinballAutoDriveConfig()" style="background: #18181b; color: #c084fc; border: 1px solid #3f3f46; border-radius: 4px; padding: 3px 6px; font-family: var(--font-mono); font-size: 0.75rem; font-weight: bold;">
+                                <option value="20">20 Sek</option>
+                                <option value="30">30 Sek</option>
+                                <option value="45" selected>45 Sek</option>
+                                <option value="60">60 Sek</option>
+                                <option value="90">90 Sek</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Zusatzhaken: NPC-Reaktion auf Jingles für Pinball -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 4px; padding: 6px 10px;">
+                        <label style="display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 0.73rem; color: #c084fc; cursor: pointer; font-weight: bold;" title="Wenn aktiv, reagieren die Besucher im Flipper während AutoDrive automatisch auf deine selbst abgespielten Jingles!">
+                            <input type="checkbox" id="adPinballJingleReactCheck" checked onchange="updatePinballAutoDriveConfig()" style="accent-color: #a855f7; width: 16px; height: 16px;">
+                            🔊 JINGLE ➔ NPC-REAKTION
+                        </label>
+                        <button type="button" onclick="openJingleModal()" style="background: #1e1b4b; color: #c084fc; border: 1px solid #7e22ce; border-radius: 4px; padding: 4px 8px; font-family: var(--font-mono); font-size: 0.7rem; font-weight: bold; cursor: pointer;">
+                            🎵 JINGLES EINSTELLEN
+                        </button>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: center;">
+                        <div style="background: #09090b; border: 1px solid #27272a; border-radius: 4px; padding: 6px 10px; text-align: center;">
+                            <div style="font-size: 0.65rem; color: #71717a; font-family: var(--font-mono); font-weight: bold;">SHOW-PHASE</div>
+                            <div id="adPinballPhaseText" style="font-family: var(--font-mono); font-weight: 900; font-size: 0.85rem; color: #c084fc;">BEREIT</div>
+                        </div>
+
+                        <button id="btnPinballAutoDriveToggle" class="pult-btn full-btn" style="height: 100%; padding: 8px; font-weight: 900; border-color: #a855f7;" onclick="togglePinballAutoDrive()">
+                            <span class="btn-led" id="adPinballLed"></span>
+                            <span id="adPinballBtnLabel">STARTEN</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 12 Gondeln Sicherheitsplan -->
+                <div class="gondola-matrix-card" style="margin-top: 10px;">
+                    <div class="gondola-matrix-header">
+                        <span>12 FLIPPER-GONDELN SICHERHEITSPLAN</span>
+                        <span class="gondola-matrix-legend">
+                            <span class="leg-item"><span class="leg-dot safe"></span>BESETZT &amp; ZU</span>
+                            <span class="leg-item"><span class="leg-dot warn"></span>OFFEN!</span>
+                            <span class="leg-item"><span class="leg-dot empty"></span>LEER</span>
+                        </span>
+                    </div>
+                    <div id="pinballGondolasGrid" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; padding-top: 6px;">
+                        <!-- 12 Gondeln dynamisch gerendert -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- MASSIVER NOT-AUS PILZ (FÜR BEIDE GÜLTIG) -->
+            <div class="estop-cluster">
+                <button class="estop-btn" id="btnEStop" onclick="toggleCmd('eStop')">
+                    <span class="estop-ring"></span>
+                    <span class="estop-title">NOT-AUS (STOP)</span>
+                    <span class="estop-sub">EMERGENCY SHUTDOWN</span>
+                </button>
+            </div>
+
+            <!-- MOBILER ZUGRIFF: QR-CODE DIREKT SICHTBAR UNTER NOT-AUS -->
+            <div style="margin-top: 14px; background: #111827; border: 1px solid #1f2937; border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: bold; color: #38bdf8; margin-bottom: 8px; letter-spacing: 0.5px;">
+                    📱 HANDY / TABLET PULT
+                </div>
+                <div style="display: inline-block; background: #ffffff; padding: 8px; border-radius: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">
+                    <img id="staticQrImg" src="qr.svg" alt="Fahrpult QR Code" style="width: 140px; height: 140px; display: block;">
+                </div>
+                <div id="staticQrUrl" style="font-family: var(--font-mono); font-size: 0.7rem; color: #9ca3af; margin-top: 8px; word-break: break-all;">
+                    Lade Netzwerk-Adresse...
+                </div>
+            </div>
+        </section>
+
+        <!-- COLUMN 2: FAHRANTRIEBE (FADERS & SPEED PADS - JETZT IM ZENTRUM!) -->
+        <section class="console-col col-drives">
+            <!-- MEGADANCE DRIVE VIEW -->
+            <div id="driveViewMegaDance">
+                <div class="col-header">
+                    <span class="col-tag">CH 01 / 02</span>
+                    <h3>MEGADANCE ANTRIEBE</h3>
+                </div>
+
+                <div class="drives-dual">
+                    <!-- Fader 1: Hauptscheibe -->
+                    <div class="fader-strip">
+                        <div class="fader-title">HAUPTSCHEIBE</div>
+                        <div class="fader-display" id="valPlate">0%</div>
+                        <div class="fader-sub-telemetry">
+                            <span class="sub-tel-lbl">DREHZAHL:</span> <span id="plateSpeedDeg" class="sub-tel-val">0.0°/s</span>
+                        </div>
+                        <div class="fader-bay">
+                            <input type="range" min="0" max="100" value="0" class="vertical-slider" id="faderPlate">
+                            <div class="fader-scale">
+                                <span>100</span><span>75</span><span>50</span><span>25</span><span>0</span>
+                            </div>
+                        </div>
+                        <div class="speed-pad">
+                            <button class="btn-speed s-stop" onclick="setSlider('faderPlate', 0)">0%</button>
+                            <button class="btn-speed" onclick="setSlider('faderPlate', 10)">10%</button>
+                            <button class="btn-speed" onclick="setSlider('faderPlate', 20)">20%</button>
+                            <button class="btn-speed" onclick="setSlider('faderPlate', 30)">30%</button>
+                            <button class="btn-speed" onclick="setSlider('faderPlate', 40)">40%</button>
+                            <button class="btn-speed" onclick="setSlider('faderPlate', 50)">50%</button>
+                            <button class="btn-speed" onclick="setSlider('faderPlate', 60)">60%</button>
+                            <button class="btn-speed" onclick="setSlider('faderPlate', 70)">70%</button>
+                            <button class="btn-speed" onclick="setSlider('faderPlate', 80)">80%</button>
+                            <button class="btn-speed" onclick="setSlider('faderPlate', 90)">90%</button>
+                            <button class="btn-speed s-max" style="grid-column: span 2;" onclick="setSlider('faderPlate', 100)">100%</button>
+                        </div>
+                    </div>
+
+                    <!-- Fader 2: Gondelkreuze -->
+                    <div class="fader-strip">
+                        <div class="fader-title">GONDELKREUZE</div>
+                        <div class="fader-display" id="valCross">0%</div>
+                        <div class="fader-sub-telemetry">
+                            <span class="sub-tel-lbl">DREHZAHL:</span> <span id="crossSpeedDeg" class="sub-tel-val">0.0°/s</span>
+                        </div>
+                        <div class="fader-bay">
+                            <input type="range" min="0" max="100" value="0" class="vertical-slider" id="faderCross">
+                            <div class="fader-scale">
+                                <span>100</span><span>75</span><span>50</span><span>25</span><span>0</span>
+                            </div>
+                        </div>
+                        <div class="speed-pad">
+                            <button class="btn-speed s-stop" onclick="setSlider('faderCross', 0)">0%</button>
+                            <button class="btn-speed" onclick="setSlider('faderCross', 10)">10%</button>
+                            <button class="btn-speed" onclick="setSlider('faderCross', 20)">20%</button>
+                            <button class="btn-speed" onclick="setSlider('faderCross', 30)">30%</button>
+                            <button class="btn-speed" onclick="setSlider('faderCross', 40)">40%</button>
+                            <button class="btn-speed" onclick="setSlider('faderCross', 50)">50%</button>
+                            <button class="btn-speed" onclick="setSlider('faderCross', 60)">60%</button>
+                            <button class="btn-speed" onclick="setSlider('faderCross', 70)">70%</button>
+                            <button class="btn-speed" onclick="setSlider('faderCross', 80)">80%</button>
+                            <button class="btn-speed" onclick="setSlider('faderCross', 90)">90%</button>
+                            <button class="btn-speed s-max" style="grid-column: span 2;" onclick="setSlider('faderCross', 100)">100%</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BOOSTER PROPELLER DRIVE VIEW -->
+            <div id="driveViewBooster" style="display: none;">
+                <div class="col-header">
+                    <span class="col-tag">BOOSTER 55M</span>
+                    <h3>PROPELLER HAUPTARM</h3>
+                </div>
+
+                <div class="booster-panel-grid">
+                    <!-- Hauptarm Fader -->
+                    <div class="fader-strip booster-fader-strip">
+                        <div class="fader-title">PROPELLER-ARM</div>
+                        <div class="fader-display" id="valBoosterArm">0%</div>
+                        <div class="fader-bay">
+                            <input type="range" min="0" max="100" value="0" class="vertical-slider" id="faderBoosterArm">
+                            <div class="fader-scale">
+                                <span>100</span><span>75</span><span>50</span><span>25</span><span>0</span>
+                            </div>
+                        </div>
+                        <div class="speed-pad mini-pad">
+                            <button class="btn-speed s-stop" onclick="setSlider('faderBoosterArm', 0)">0%</button>
+                            <button class="btn-speed" onclick="setSlider('faderBoosterArm', 25)">25%</button>
+                            <button class="btn-speed" onclick="setSlider('faderBoosterArm', 50)">50%</button>
+                            <button class="btn-speed" onclick="setSlider('faderBoosterArm', 75)">75%</button>
+                            <button class="btn-speed s-max" style="grid-column: span 2;" onclick="setSlider('faderBoosterArm', 100)">100%</button>
+                        </div>
+                    </div>
+
+                    <!-- Booster Sonder-Steuerung & Park-Tasten -->
+                    <div class="booster-controls-col">
+                        <div class="booster-btn-group">
+                            <button class="pult-btn toggle-btn" id="btnBoosterArmMotor" onclick="toggleCmd('setBoosterArmOn')">
+                                <span class="btn-led"></span>
+                                <span class="btn-text">MOTOR HAUPTARM</span>
+                            </button>
+                            <button class="pult-btn toggle-btn" id="btnBoosterArmRev" onclick="toggleCmd('setBoosterArmReverse')">
+                                <span class="btn-led"></span>
+                                <span class="btn-text">DREHRICHTUNG REVERSE</span>
+                            </button>
+                        </div>
+
+                        <!-- Parken Gondel 1 & 2 -->
+                        <div class="booster-park-box">
+                            <span class="rack-lbl">AUTOMATISCHES PARKEN</span>
+                            <div class="park-btn-row">
+                                <button class="park-action-btn" id="btnBoosterPark1" onclick="sendCmd({ boosterPark1: true })">
+                                    <span class="park-num">P1</span>
+                                    <span>PARKEN GONDEL 1</span>
+                                </button>
+                                <button class="park-action-btn" id="btnBoosterPark2" onclick="sendCmd({ boosterPark2: true })">
+                                    <span class="park-num">P2</span>
+                                    <span>PARKEN GONDEL 2</span>
+                                </button>
+                            </div>
+                            <button class="pult-btn full-btn" onclick="sendCmd({ boosterReset: true })">
+                                <span>🔄 POSITION RESET</span>
+                            </button>
+                        </div>
+
+                        <!-- Gondel 1 & 2 Bügel und Bremsen -->
+                        <div class="booster-gondolas-box">
+                            <div class="bgondola-card">
+                                <div class="bgondola-head">
+                                    <span>GONDEL 1 (UNTEN)</span>
+                                    <span class="bgondola-stat" id="statBoosterG1">--</span>
+                                </div>
+                                <div class="bgondola-actions">
+                                    <button class="pult-btn btn-tiny" onclick="sendCmd({ boosterHarness1: true })">BÜGEL ZU</button>
+                                    <button class="pult-btn btn-tiny" onclick="sendCmd({ boosterHarness1: false })">BÜGEL AUF</button>
+                                    <button class="pult-btn toggle-btn btn-tiny" id="btnBoosterG1Brake" onclick="toggleCmd('boosterGondola1Brake')">BREMSE</button>
+                                </div>
+                            </div>
+
+                            <div class="bgondola-card">
+                                <div class="bgondola-head">
+                                    <span>GONDEL 2 (OBEN)</span>
+                                    <span class="bgondola-stat" id="statBoosterG2">--</span>
+                                </div>
+                                <div class="bgondola-actions">
+                                    <button class="pult-btn btn-tiny" onclick="sendCmd({ boosterHarness2: true })">BÜGEL ZU</button>
+                                    <button class="pult-btn btn-tiny" onclick="sendCmd({ boosterHarness2: false })">BÜGEL AUF</button>
+                                    <button class="pult-btn toggle-btn btn-tiny" id="btnBoosterG2Brake" onclick="toggleCmd('boosterGondola2Brake')">BREMSE</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Wind-Alarm Indikator -->
+                        <div class="booster-wind-box" id="boosterWindAlarmBox">
+                            <span class="wind-icon">💨</span>
+                            <span class="wind-text" id="boosterWindText">WIND-STATUS: NORMAL (KEIN ALARM)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- XPLOSION DRIVE VIEW -->
+            <div id="driveViewXplosion" style="display: none;">
+                <div class="col-header">
+                    <span class="col-tag">TURM-ABSCHUSS</span>
+                    <h3>BUNGEE ABSCHUSS & WINCH</h3>
+                </div>
+
+                <div class="xplosion-console">
+                    <!-- Großer Launch Freigabe Taster -->
+                    <div class="xplosion-launch-card">
+                        <div class="xplosion-card-title" style="justify-content: center; color: #fbbf24; font-size: 0.85rem; margin-bottom: 6px;">
+                            <span>🚀</span> HAUPT-ABSCHUSS FREIGABE (LAUNCH)
+                        </div>
+                        <p style="font-size: 0.75rem; color: #94a3b8; margin: 0 0 14px 0; line-height: 1.4;">
+                            Klinkt die Kugelgondel bei voller Seilspannung blitzartig aus. Vorher Seile spannen!
+                        </p>
+                        <button class="xplosion-launch-btn" id="btnXplosionLaunch" onclick="sendCmd({ setXplosionLaunch: true })">
+                            <span>💥 ABSCHUSS FREIGEBEN</span>
+                            <span class="xplosion-launch-sub">[ TASTE T / FREIGABE 1 + 2 ]</span>
+                        </button>
+                    </div>
+
+                    <!-- Hebewerk / Stamp Steuerung -->
+                    <div class="xplosion-actions-card">
+                        <div class="xplosion-card-title">
+                            <span>🏗️</span> GONDEL HEBEWERK (STAMP)
+                        </div>
+                        <div class="xplosion-stamp-grid">
+                            <button class="xplosion-stamp-btn" id="btnXplosionGondolaDown" onclick="sendCmd({ setXplosionGondolaDown: true })">
+                                <span class="xplosion-stamp-icon">⬇️</span>
+                                <span>RUNTER</span>
+                            </button>
+                            <button class="xplosion-stamp-btn" id="btnXplosionGondolaStop" onclick="sendCmd({ setXplosionGondolaStop: true })">
+                                <span class="xplosion-stamp-icon">⏸️</span>
+                                <span>HALT / STOP</span>
+                            </button>
+                            <button class="xplosion-stamp-btn" id="btnXplosionGondolaUp" onclick="sendCmd({ setXplosionGondolaUp: true })">
+                                <span class="xplosion-stamp-icon">⬆️</span>
+                                <span>HOCH</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Effekte & Strobo & S2L Status -->
+                    <div class="xplosion-actions-card">
+                        <div class="xplosion-card-title" style="justify-content: space-between;">
+                            <span>✨ SKYSHOT EFFEKTE & S2L</span>
+                            <span id="xplosionS2LBadge" style="font-family: var(--font-mono); font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: rgba(168, 85, 247, 0.2); border: 1px solid #a855f7; color: #f3e8ff;">S2L STANDBY</span>
+                        </div>
+                        <div class="xplosion-stamp-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+                            <button class="pult-btn toggle-btn" id="btnXplosionFog" onclick="toggleCmd('setFog')">
+                                <span class="btn-led"></span>
+                                <span class="btn-text">NEBEL</span>
+                            </button>
+                            <button class="pult-btn toggle-btn" id="btnXplosionStrobo" onclick="toggleCmd('setStrobo')">
+                                <span class="btn-led"></span>
+                                <span class="btn-text">STROBO</span>
+                            </button>
+                            <button class="pult-btn toggle-btn" id="btnXplosionS2L" onclick="toggleCmd('setS2LLight')" style="border-color: #a855f7;">
+                                <span class="btn-led" id="xplosionS2LLed"></span>
+                                <span class="btn-text">🎵 S2L LICHT</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PINBALL (FLIPPER) DRIVE VIEW -->
+            <div id="driveViewPinball" style="display: none;">
+                <div class="col-header">
+                    <span class="col-tag">FLIPPER DRIVE &amp; HUB</span>
+                    <h3>PLATTE, DREHRICHTUNG &amp; HUBARM</h3>
+                </div>
+
+                <div class="booster-panel-grid">
+                    <!-- Hauptscheibe Fader -->
+                    <div class="fader-strip booster-fader-strip">
+                        <div class="fader-title">HAUPTSCHEIBE</div>
+                        <div class="fader-display" id="valPinballPlate">0%</div>
+                        <div class="fader-sub-telemetry">
+                            <span class="sub-tel-lbl">IST-TEMPO:</span> <span id="pinballSpeedVal" class="sub-tel-val">0%</span>
+                        </div>
+                        <div class="fader-bay">
+                            <input type="range" min="0" max="100" value="0" class="vertical-slider" id="faderPinballPlate">
+                            <div class="fader-scale">
+                                <span>100</span><span>75</span><span>50</span><span>25</span><span>0</span>
+                            </div>
+                        </div>
+                        <div class="speed-pad mini-pad">
+                            <button class="btn-speed s-stop" onclick="setSlider('faderPinballPlate', 0)">0%</button>
+                            <button class="btn-speed" onclick="setSlider('faderPinballPlate', 25)">25%</button>
+                            <button class="btn-speed" onclick="setSlider('faderPinballPlate', 50)">50%</button>
+                            <button class="btn-speed" onclick="setSlider('faderPinballPlate', 75)">75%</button>
+                            <button class="btn-speed s-max" style="grid-column: span 2;" onclick="setSlider('faderPinballPlate', 100)">100%</button>
+                        </div>
+                    </div>
+
+                    <!-- Drehrichtung, Positionierung & Hubarm -->
+                    <div class="booster-controls-col">
+                        <!-- Drehrichtung -->
+                        <div class="booster-park-box">
+                            <span class="rack-lbl">🔄 DREHRICHTUNG HAUPTSCHEIBE</span>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 6px;">
+                                <button class="pult-btn toggle-btn" id="btnPinballDirFwd" onclick="sendCmd({ setPinballDirection: 0 })">
+                                    <span class="btn-led"></span>
+                                    <span class="btn-text">⏩ VORWÄRTS</span>
+                                </button>
+                                <button class="pult-btn toggle-btn" id="btnPinballDirStop" onclick="sendCmd({ setPinballDirection: 1 })">
+                                    <span class="btn-led"></span>
+                                    <span class="btn-text">⏹️ STOPP</span>
+                                </button>
+                                <button class="pult-btn toggle-btn" id="btnPinballDirBwd" onclick="sendCmd({ setPinballDirection: 2 })">
+                                    <span class="btn-led"></span>
+                                    <span class="btn-text">⏪ RÜCKWÄRTS</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Langsam-Positionieren (Tippbetrieb Vor / Zurück) -->
+                        <div class="booster-park-box">
+                            <span class="rack-lbl">🎯 LANGSAM POSITIONIEREN (GEDRÜCKT HALTEN)</span>
+                            <div class="park-btn-row" style="margin-top: 6px;">
+                                <button class="park-action-btn" id="btnPinballMoveFwd"
+                                        onmousedown="sendCmd({ setPinballMoveFwd: true })"
+                                        onmouseup="sendCmd({ setPinballMoveFwd: false })"
+                                        onmouseleave="sendCmd({ setPinballMoveFwd: false })"
+                                        ontouchstart="sendCmd({ setPinballMoveFwd: true })"
+                                        ontouchend="sendCmd({ setPinballMoveFwd: false })">
+                                    <span class="park-num">▶️</span>
+                                    <span>LANGSAM VOR</span>
+                                </button>
+                                <button class="park-action-btn" id="btnPinballMoveBwd"
+                                        onmousedown="sendCmd({ setPinballMoveBwd: true })"
+                                        onmouseup="sendCmd({ setPinballMoveBwd: false })"
+                                        onmouseleave="sendCmd({ setPinballMoveBwd: false })"
+                                        ontouchstart="sendCmd({ setPinballMoveBwd: true })"
+                                        ontouchend="sendCmd({ setPinballMoveBwd: false })">
+                                    <span class="park-num">◀️</span>
+                                    <span>LANGSAM ZURÜCK</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Hydraulischer Hubarm (Schräglage) -->
+                        <div class="booster-park-box">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <span class="rack-lbl">🏗️ HYDRAULIK-HUBARM (SCHRÄGLAGE)</span>
+                                <span id="pinballHubPctVal" style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: 900; color: #38bdf8;">0%</span>
+                            </div>
+                            <div class="xplosion-bar-track" style="margin-bottom: 10px;">
+                                <div class="xplosion-bar-fill" id="pinballHubBar" style="width: 0%;"></div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;">
+                                <button class="pult-btn toggle-btn" id="btnPinballHubUp" onclick="sendCmd({ setPinballHub: 0 })">
+                                    <span class="btn-led"></span>
+                                    <span class="btn-text">⬆️ HEBEN</span>
+                                </button>
+                                <button class="pult-btn toggle-btn" id="btnPinballHubStop" onclick="sendCmd({ setPinballHub: 1 })">
+                                    <span class="btn-led"></span>
+                                    <span class="btn-text">⏸️ HALT</span>
+                                </button>
+                                <button class="pult-btn toggle-btn" id="btnPinballHubDown" onclick="sendCmd({ setPinballHub: 2 })">
+                                    <span class="btn-led"></span>
+                                    <span class="btn-text">⬇️ SENKEN</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Status-Zusammenfassung -->
+                        <div class="booster-wind-box" id="pinballStatusInfoBox">
+                            <span class="wind-icon">🎱</span>
+                            <span class="wind-text" id="pinballStatusInfoText">STATUS: BEREIT FÜR EINSTIEG</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- COLUMN 3: REKO-PAD & SHOW CONTROL (IMMER SOFORT ERREICHBAR!) -->
+        <section class="console-col col-reko">
+            <div class="col-header">
+                <span class="col-tag">SHOW & SFX</span>
+                <h3>REKO-BOARD & EFFEKTE</h3>
+            </div>
+
+            <!-- Fette Reko Action-Taster -->
+            <div class="reko-action-grid">
+                <button class="reko-btn btn-horn" id="btnHorn"
+                        onmousedown="sendCmd({ setHorn: true })"
+                        onmouseup="sendCmd({ setHorn: false })"
+                        ontouchstart="sendCmd({ setHorn: true })"
+                        ontouchend="sendCmd({ setHorn: false })">
+                    <span class="reko-icon">📢</span>
+                    <span class="reko-label">SIGNALHORN</span>
+                    <span class="reko-hint">DRÜCKEN</span>
+                </button>
+
+                <button class="reko-btn btn-fog" id="btnFog" onclick="toggleCmd('setFog')">
+                    <span class="reko-icon">💨</span>
+                    <span class="reko-label">NEBEL</span>
+                    <span class="reko-hint">AN / AUS</span>
+                </button>
+
+                <button class="reko-btn btn-flame" id="btnFlame"
+                        onmousedown="sendCmd({ setFlame: true })"
+                        onmouseup="sendCmd({ setFlame: false })"
+                        ontouchstart="sendCmd({ setFlame: true })"
+                        ontouchend="sendCmd({ setFlame: false })">
+                    <span class="reko-icon">🔥</span>
+                    <span class="reko-label">FEUERSTOSS</span>
+                    <span class="reko-hint">HALTEN</span>
+                </button>
+
+                <button class="reko-btn btn-strobo" id="btnStrobo"
+                        onmousedown="sendCmd({ setStrobo: true })"
+                        onmouseup="sendCmd({ setStrobo: false })"
+                        ontouchstart="sendCmd({ setStrobo: true })"
+                        ontouchend="sendCmd({ setStrobo: false })">
+                    <span class="reko-icon">⚡</span>
+                    <span class="reko-label">STROBO FLASH</span>
+                    <span class="reko-hint">FLASH</span>
+                </button>
+            </div>
+
+            <!-- BESUCHER / NPC INTERAKTIONEN (NEU) -->
+            <div class="show-subpanel" style="margin-top: 10px;">
+                <div class="panel-section-title">
+                    <span>BESUCHER INTERAKTION & SHOW</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+                    <button class="pult-btn toggle-btn" id="btnPeepHands" onclick="sendCmd({ peepHandsToggle: true })" style="padding: 10px 4px; border-color: #38bdf8;" title="Alle Fahrgäste reißen die Hände in die Luft!">
+                        <span class="btn-led"></span>
+                        <span class="btn-text" style="font-size: 0.8rem; font-weight: bold; color: #38bdf8;">🙌 HÄNDE HOCH</span>
+                    </button>
+                    <button class="pult-btn toggle-btn" id="btnPeepClap" onclick="sendCmd({ peepClapToggle: true })" style="padding: 10px 4px; border-color: #facc15;" title="Fahrgäste & Besucher klatschen im Takt!">
+                        <span class="btn-led"></span>
+                        <span class="btn-text" style="font-size: 0.8rem; font-weight: bold; color: #facc15;">👏 KLATSCHEN</span>
+                    </button>
+                    <button class="pult-btn" id="btnPeepAgain" onclick="sendCmd({ peepAgain: true })" style="padding: 10px 4px; border-color: #4ade80;" title="Zugabe fordern / Jubeln!">
+                        <span class="btn-text" style="font-size: 0.8rem; font-weight: bold; color: #4ade80;">🎉 ZUGABE!</span>
+                    </button>
+                </div>
+            </div>
+
+                        <!-- ========================================================= -->
+            <!-- DEDIZIERTER SOUND2LIGHT (S2L) BEREICH (1:1 STREAMDECK)      -->
+            <!-- ========================================================= -->
+            <div class="show-subpanel" style="border: 1px solid #7e22ce; background: linear-gradient(180deg, rgba(88, 28, 135, 0.25) 0%, rgba(24, 24, 27, 0.6) 100%); margin-bottom: 16px; border-radius: 10px; padding: 12px; box-sizing: border-box; width: 100%; overflow: hidden;">
+                <div class="panel-section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #6b21a8; padding-bottom: 8px;">
+                    <span style="display: flex; align-items: center; gap: 8px; color: #e9d5ff; font-weight: 800; font-size: 0.85rem; letter-spacing: 0.5px;">
+                        <span>🎵</span> SOUND2LIGHT (S2L) ENGINE
+                    </span>
+                    <button class="pult-btn toggle-btn btn-tiny" id="btnS2LLight" onclick="toggleCmd('setS2LLight')" style="border-color: #a855f7; color: #f3e8ff; min-width: 90px; font-weight: bold; background: rgba(147, 51, 234, 0.2);" title="Sound2Light Master Toggle: Reagiert live auf In-Game Musik & Fairground Radio">
+                        <span class="btn-led" id="s2lBeatLed" style="box-shadow: 0 0 8px #c084fc;"></span>
+                        <span class="btn-text">S2L AKTIV</span>
+                    </button>
+                </div>
+
+                <!-- Empfindlichkeit Slider Full Width -->
+                <div style="background: rgba(24, 24, 27, 0.7); border: 1px solid #4c1d95; padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; box-sizing: border-box; width: 100%;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 0.8rem;">
+                        <span style="color: #d8b4fe; font-weight: 600;">Empfindlichkeit:</span>
+                        <span id="lblS2LSens" style="color: #f3e8ff; font-weight: bold;">50%</span>
+                    </div>
+                    <input type="range" id="rngS2LSens" min="0" max="100" value="50" style="width: 100%; accent-color: #a855f7; margin: 0; display: block;" oninput="window._isDraggingS2LSens = true; document.getElementById('lblS2LSens').innerText = this.value + '%'; sendS2LVal('s2lSensitivity', parseInt(this.value));" onchange="window._isDraggingS2LSens = false;">
+                </div>
+
+                <!-- Drop & Nachtmodus Master Toggles -->
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; width: 100%; box-sizing: border-box;">
+                    <button class="pult-btn toggle-btn btn-tiny" id="s2lBtn_alles" onclick="toggleS2LSetting('s2lAllEffects', this)" style="padding: 6px 2px; text-align: center; border-color: #7e22ce; width: 100%; min-width: 0;" title="Alles AN bei Drops">
+                        <span class="btn-led"></span>
+                        <span style="font-size: 0.65rem;">DROP (MAX)</span>
+                    </button>
+                    <button class="pult-btn toggle-btn btn-tiny" id="s2lBtn_night" onclick="toggleS2LSetting('s2lNightMode', this)" style="padding: 6px 2px; text-align: center; border-color: #7e22ce; width: 100%; min-width: 0;" title="Nacht-Modus (verdoppelt Cooldowns)">
+                        <span class="btn-led"></span>
+                        <span style="font-size: 0.65rem;">NACHT</span>
+                    </button>
+                    <button class="pult-btn toggle-btn btn-tiny" id="s2lBtn_gondelpause" onclick="toggleS2LSetting('s2lKreuzMotorPauseEnabled', this)" style="padding: 6px 2px; text-align: center; border-color: #7e22ce; width: 100%; min-width: 0;" title="Gondel-Pausen während Fahrt">
+                        <span class="btn-led"></span>
+                        <span style="font-size: 0.65rem;">PAUSEN</span>
+                    </button>
+                </div>
+
+                <!-- Effekte Ein-/Ausschalten Matrix -->
+                <div style="background: rgba(24, 24, 27, 0.7); border: 1px solid #4c1d95; padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; box-sizing: border-box; width: 100%;">
+                    <div style="font-size: 0.72rem; text-transform: uppercase; color: #c084fc; font-weight: bold; margin-bottom: 6px; letter-spacing: 0.5px;">Effekte an / abstellen (Live Sync):</div>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;">
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 0.78rem; cursor: pointer; color: #f4f4f5;">
+                            <input type="checkbox" id="chk_s2lStrobo" onchange="sendS2LVal('s2lStrobo', this.checked)" style="accent-color: #a855f7;"> Strobo (Blitze)
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 0.78rem; cursor: pointer; color: #f4f4f5;">
+                            <input type="checkbox" id="chk_s2lFog" onchange="sendS2LVal('s2lFog', this.checked)" style="accent-color: #a855f7;"> Nebel (Fog)
+                        </label>
+                        <label id="lbl_s2lFlame" style="display: flex; align-items: center; gap: 6px; font-size: 0.78rem; cursor: pointer; color: #f4f4f5;">
+                            <input type="checkbox" id="chk_s2lFlame" onchange="sendS2LVal('s2lFlame', this.checked)" style="accent-color: #a855f7;"> Flammen (Fire)
+                        </label>
+                        <label id="lbl_s2lLED" style="display: flex; align-items: center; gap: 6px; font-size: 0.78rem; cursor: pointer; color: #f4f4f5;">
+                            <input type="checkbox" id="chk_s2lLED" onchange="sendS2LVal('s2lLED', this.checked)" style="accent-color: #a855f7;"> LED-Strobo
+                        </label>
+                        <label id="lbl_s2lColorStrobe" style="display: flex; align-items: center; gap: 6px; font-size: 0.78rem; cursor: pointer; color: #f4f4f5;">
+                            <input type="checkbox" id="chk_s2lColorStrobe" onchange="sendS2LVal('s2lColorStrobe', this.checked)" style="accent-color: #a855f7;"> Farb-Strobo
+                        </label>
+                        <label id="lbl_s2lSpot" style="display: flex; align-items: center; gap: 6px; font-size: 0.78rem; cursor: pointer; color: #f4f4f5;">
+                            <input type="checkbox" id="chk_s2lSpot" onchange="sendS2LVal('s2lSpot', this.checked)" style="accent-color: #a855f7;"> Scheinwerfer
+                        </label>
+                        <label id="lbl_s2lBubble" style="display: flex; align-items: center; gap: 6px; font-size: 0.78rem; cursor: pointer; color: #f4f4f5;">
+                            <input type="checkbox" id="chk_s2lBubble" onchange="sendS2LVal('s2lBubble', this.checked)" style="accent-color: #a855f7;"> Seifenblasen
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 0.78rem; cursor: pointer; color: #38bdf8; font-weight: 600;">
+                            <input type="checkbox" id="chk_s2lPeepsHands" onchange="sendS2LVal('s2lPeepsHands', this.checked)" style="accent-color: #38bdf8;"> 🙌 Hände hoch (Drop)
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 0.78rem; cursor: pointer; color: #facc15; font-weight: 600;">
+                            <input type="checkbox" id="chk_s2lPeepsClap" onchange="sendS2LVal('s2lPeepsClap', this.checked)" style="accent-color: #facc15;"> 👏 Klatschen (Takt)
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Einzellichter 1-9 Matrix -->
+                <div id="s2lSingleLightsBox" style="background: rgba(24, 24, 27, 0.7); border: 1px solid #4c1d95; padding: 8px 12px; border-radius: 8px; box-sizing: border-box; width: 100%;">
+                    <div style="font-size: 0.72rem; text-transform: uppercase; color: #c084fc; font-weight: bold; margin-bottom: 6px; letter-spacing: 0.5px;">Einzellichter (Animation aktiv f&uuml;r):</div>
+                    <div style="display: grid; grid-template-columns: repeat(9, 1fr); gap: 3px; text-align: center; width: 100%; box-sizing: border-box;">
+                        <label style="font-size: 0.72rem; cursor: pointer; background: rgba(39, 39, 42, 0.6); padding: 3px 0; border-radius: 4px; border: 1px solid #3f3f46; display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                            <span>L1</span><input type="checkbox" id="chk_s2lLight1" onchange="sendS2LVal('s2lLight1', this.checked)" style="accent-color: #a855f7; margin: 0;">
+                        </label>
+                        <label style="font-size: 0.72rem; cursor: pointer; background: rgba(39, 39, 42, 0.6); padding: 3px 0; border-radius: 4px; border: 1px solid #3f3f46; display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                            <span>L2</span><input type="checkbox" id="chk_s2lLight2" onchange="sendS2LVal('s2lLight2', this.checked)" style="accent-color: #a855f7; margin: 0;">
+                        </label>
+                        <label style="font-size: 0.72rem; cursor: pointer; background: rgba(39, 39, 42, 0.6); padding: 3px 0; border-radius: 4px; border: 1px solid #3f3f46; display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                            <span>L3</span><input type="checkbox" id="chk_s2lLight3" onchange="sendS2LVal('s2lLight3', this.checked)" style="accent-color: #a855f7; margin: 0;">
+                        </label>
+                        <label style="font-size: 0.72rem; cursor: pointer; background: rgba(39, 39, 42, 0.6); padding: 3px 0; border-radius: 4px; border: 1px solid #3f3f46; display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                            <span>L4</span><input type="checkbox" id="chk_s2lLight4" onchange="sendS2LVal('s2lLight4', this.checked)" style="accent-color: #a855f7; margin: 0;">
+                        </label>
+                        <label style="font-size: 0.72rem; cursor: pointer; background: rgba(39, 39, 42, 0.6); padding: 3px 0; border-radius: 4px; border: 1px solid #3f3f46; display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                            <span>L5</span><input type="checkbox" id="chk_s2lLight5" onchange="sendS2LVal('s2lLight5', this.checked)" style="accent-color: #a855f7; margin: 0;">
+                        </label>
+                        <label style="font-size: 0.72rem; cursor: pointer; background: rgba(39, 39, 42, 0.6); padding: 3px 0; border-radius: 4px; border: 1px solid #3f3f46; display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                            <span>L6</span><input type="checkbox" id="chk_s2lLight6" onchange="sendS2LVal('s2lLight6', this.checked)" style="accent-color: #a855f7; margin: 0;">
+                        </label>
+                        <label style="font-size: 0.72rem; cursor: pointer; background: rgba(39, 39, 42, 0.6); padding: 3px 0; border-radius: 4px; border: 1px solid #3f3f46; display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                            <span>L7</span><input type="checkbox" id="chk_s2lLight7" onchange="sendS2LVal('s2lLight7', this.checked)" style="accent-color: #a855f7; margin: 0;">
+                        </label>
+                        <label style="font-size: 0.72rem; cursor: pointer; background: rgba(39, 39, 42, 0.6); padding: 3px 0; border-radius: 4px; border: 1px solid #3f3f46; display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                            <span>L8</span><input type="checkbox" id="chk_s2lLight8" onchange="sendS2LVal('s2lLight8', this.checked)" style="accent-color: #a855f7; margin: 0;">
+                        </label>
+                        <label style="font-size: 0.72rem; cursor: pointer; background: rgba(39, 39, 42, 0.6); padding: 3px 0; border-radius: 4px; border: 1px solid #3f3f46; display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                            <span>L9</span><input type="checkbox" id="chk_s2lLight9" onchange="sendS2LVal('s2lLight9', this.checked)" style="accent-color: #a855f7; margin: 0;">
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Show-Presets & Lichter Direktwahl -->
+            <div class="show-subpanel">
+                <div class="panel-section-title">
+                    <span>HAUPTBELEUCHTUNG & SKYSPOTS</span>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+
+                        <button class="pult-btn toggle-btn btn-micro" id="btnAllLights" onclick="toggleCmd('setAllLightsOn')">
+                            <span class="btn-led"></span>
+                            <span class="btn-text">LICHT AN</span>
+                        </button>
+                        <button class="pult-btn toggle-btn btn-micro" id="btnSpots" onclick="toggleCmd('setSpotsOn')">
+                            <span class="btn-led"></span>
+                            <span class="btn-text">SPOTS AN</span>
+                        </button>
+                        <div id="spotColorIndicator" class="spot-indicator" title="Live Spot-Farbe"></div>
+                    </div>
+                </div>
+
+                <!-- 12 Farbfelder Direktmatrix (Synchronisiert Spots, Scheinwerfer & Türme) -->
+                <div class="color-palette mini-palette">
+                    <button class="color-swatch" style="background: #ffffff;" onclick="setGlobalColor(0)" title="Weiß"></button>
+                    <button class="color-swatch" style="background: #ff0000;" onclick="setGlobalColor(1)" title="Rot (Scheinwerfer 2 / Türme 26)"></button>
+                    <button class="color-swatch" style="background: #0080ff;" onclick="setGlobalColor(2)" title="Blau"></button>
+                    <button class="color-swatch" style="background: #00ff00;" onclick="setGlobalColor(3)" title="Grün"></button>
+                    <button class="color-swatch" style="background: #ffff00;" onclick="setGlobalColor(4)" title="Gelb"></button>
+                    <button class="color-swatch" style="background: #ff00ff;" onclick="setGlobalColor(5)" title="Magenta"></button>
+                    <button class="color-swatch" style="background: #00ffff;" onclick="setGlobalColor(6)" title="Cyan"></button>
+                    <button class="color-swatch" style="background: #ff8000;" onclick="setGlobalColor(7)" title="Orange"></button>
+                    <button class="color-swatch" style="background: #8000ff;" onclick="setGlobalColor(8)" title="Lila"></button>
+                    <button class="color-swatch" style="background: #ff3399;" onclick="setGlobalColor(9)" title="Pink"></button>
+                    <button class="color-swatch" style="background: #00ff80;" onclick="setGlobalColor(10)" title="Mint"></button>
+                    <button class="color-swatch" style="background: #ccff00;" onclick="setGlobalColor(11)" title="Limette"></button>
+                </div>
+
+
+                <div class="mini-btn-row">
+                    <button class="pult-btn toggle-btn btn-tiny" id="btnMHOn" onclick="toggleCmd('setMHOn')">
+                        <span class="btn-led"></span>
+                        <span class="btn-text">MH POWER</span>
+                    </button>
+                    <button class="pult-btn toggle-btn btn-tiny" id="btnMHLightSync" onclick="toggleCmd('setMHLightSync')">
+                        <span class="btn-led"></span>
+                        <span class="btn-text">LIGHT SYNC</span>
+                    </button>
+                    <button class="pult-btn toggle-btn btn-tiny" id="btnMHColorStrobo" onclick="toggleCmd('setMHColorStrobo')">
+                        <span class="btn-led"></span>
+                        <span class="btn-text">COLOR STROBO</span>
+                    </button>
+                    <button class="pult-btn toggle-btn btn-tiny" id="btnBubbles" onclick="toggleCmd('setBubbles')">
+                        <span class="btn-led"></span>
+                        <span class="btn-text">🫧 BLASEN</span>
+                    </button>
+                </div>
+
+                <!-- Live Direktwahl Matrix für MH-Muster, Farben & Gobos -->
+                <div class="mh-matrix-card">
+                    <div class="mh-tab-bar">
+                        <button class="mh-tab-btn active" id="tabBtnMhProg" onclick="switchMhTab('prog')">🎯 MUSTER</button>
+                        <button class="mh-tab-btn" id="tabBtnMhColor" onclick="switchMhTab('color')">🌈 FARBE</button>
+                        <button class="mh-tab-btn" id="tabBtnMhGobo" onclick="switchMhTab('gobo')">🔮 GOBO</button>
+                    </div>
+
+                    <!-- Panel 1: Bewegungsmuster -->
+                    <div class="mh-tab-panel active" id="panelMhProg">
+                        <div class="mh-matrix-grid" id="gridMhProg">
+                            <span class="mh-loading">Lade Bewegungsmuster aus Spiel...</span>
+                        </div>
+                    </div>
+
+                    <!-- Panel 2: Farbmuster -->
+                    <div class="mh-tab-panel" id="panelMhColor">
+                        <div class="mh-matrix-grid" id="gridMhColor">
+                            <span class="mh-loading">Lade Farbprogramme aus Spiel...</span>
+                        </div>
+                    </div>
+
+                    <!-- Panel 3: Gobo-Schablonen -->
+                    <div class="mh-tab-panel" id="panelMhGobo">
+                        <div class="mh-matrix-grid" id="gridMhGobo">
+                            <span class="mh-loading">Lade Gobos aus Spiel...</span>
+                        </div>
+                    </div>
+                <!-- MH Dynamic Sliders (Tempo, Gobo-Drehung & Lichtintensität) -->
+                <div class="mh-sliders-box" id="mhSlidersBox">
+                    <div class="mh-slider-row">
+                        <div class="mh-slider-head">
+                            <span>MUSTER-TEMPO:</span>
+                            <span id="mhSpeedVal">100%</span>
+                        </div>
+                        <input type="range" min="0" max="100" value="100" class="mh-horiz-slider" id="sliderMhSpeed"
+                               oninput="onMhSpeedInput(this.value)">
+                    </div>
+                    <div class="mh-slider-row">
+                        <div class="mh-slider-head">
+                            <span>GOBO-DREHUNG:</span>
+                            <span id="mhGoboRotVal">0%</span>
+                        </div>
+                        <input type="range" min="0" max="100" value="0" class="mh-horiz-slider" id="sliderMhGoboRot"
+                               oninput="onMhGoboRotInput(this.value)">
+                    </div>
+                    <div class="mh-slider-row">
+                        <div class="mh-slider-head">
+                            <span>LICHTINTENSITÄT (HELLIGKEIT):</span>
+                            <span id="mhIntensityVal">100%</span>
+                        </div>
+                        <input type="range" min="10" max="300" value="100" class="mh-horiz-slider" id="sliderMhIntensity"
+                               oninput="onMhIntensityInput(this.value)">
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ======================================================================
+         3. FOOTER: FESTPLATZ LIVE TELEMETRIE & AUDIO PLAYER
+         ====================================================================== -->
+    <footer class="master-footer">
+        <div class="footer-left">
+            <span class="footer-stat">🎪 <strong>FESTPLATZ:</strong> <span id="parkGuestsVal">0</span> Besucher</span>
+            <span class="footer-stat">🎟️ <strong>KASSENSCHLANGE:</strong> <span id="cashierQueueVal">0</span> anstehend</span>
+            <span class="footer-stat">🪙 <strong>CHIPS:</strong> <span id="tokensVal">0</span> gesammelt (<span id="clickableTokensVal">0</span> auf Festplatz)</span>
+        </div>
+        <div class="footer-right">
+            <div class="audio-transport">
+                <button class="audio-ctrl-btn" onclick="sendCmd({ audioPrev: true })" title="Vorheriger Track">⏮️</button>
+                <button class="audio-ctrl-btn play-btn" id="btnAudioPlay" onclick="sendCmd({ audioPlay: true })" title="Play / Pause">▶️</button>
+                <button class="audio-ctrl-btn" onclick="sendCmd({ audioNext: true })" title="Nächster Track">⏭️</button>
+            </div>
+            <span class="music-icon">🎵</span>
+            <span class="music-title" id="musicTitle">Keine Musik aktiv</span>
+            <span class="music-artist" id="musicArtist"></span>
+            <span class="music-timer" id="musicTime">00:00 / 00:00</span>
+        </div>
+    </footer>
+
+    <!-- ======================================================================
+         4. UHRZEIT & WETTER MODAL (HOST CONTROL)
+         ====================================================================== -->
+    <div id="envModalOverlay" class="env-modal-overlay" onclick="onEnvModalOverlayClick(event)">
+        <div class="env-modal-card">
+            <div class="env-modal-header">
+                <span class="env-modal-title">🎪 KIRMES-LEITSTAND & HOST-STEUERUNG</span>
+                <button class="env-modal-close" onclick="toggleEnvModal()">✕</button>
+            </div>
+
+            <!-- Uhrzeit Sektion -->
+            <div class="env-section">
+                <div class="env-section-title">
+                    <span>⏰ TAGESZEIT: <strong id="envModalTimeDisplay">12:00 Uhr</strong></span>
+                    <label class="env-realtime-toggle">
+                        <input type="checkbox" id="envRealTimeCheck" onchange="toggleRealTimeMode(this.checked)">
+                        <span>Echtzeit-Modus</span>
+                    </label>
+                </div>
+                
+                <input type="range" min="0" max="23.99" step="0.25" value="12" class="env-time-slider" id="envTimeSlider"
+                       oninput="onEnvTimeSliderInput(this.value)" onchange="onEnvTimeSliderChange(this.value)">
+
+                <!-- Schnelltasten für Tageszeiten -->
+                <div class="env-presets-grid">
+                    <button class="env-preset-btn" onclick="setQuickTime(6.0)">🌅 Morgen (06:00)</button>
+                    <button class="env-preset-btn" onclick="setQuickTime(12.0)">☀️ Mittag (12:00)</button>
+                    <button class="env-preset-btn" onclick="setQuickTime(18.5)">🌇 Abend (18:30)</button>
+                    <button class="env-preset-btn" onclick="setQuickTime(22.0)">🌙 Nacht (22:00)</button>
+                    <button class="env-preset-btn" onclick="setQuickTime(0.0)">🌌 Mitternacht (00:00)</button>
+                </div>
+            </div>
+
+            <!-- Wetter Sektion -->
+            <div class="env-section">
+                <div class="env-section-title">
+                    <span>🌦️ WETTER AUSWAHL</span>
+                    <span id="envModalWeatherActive" style="color: #10b981; font-weight: bold;">--</span>
+                </div>
+                <div class="env-weather-grid">
+                    <button class="env-weather-btn" id="btnWeather0" onclick="setQuickWeather(0)">
+                        <span class="weather-icon">☀️</span>
+                        <span class="weather-label">Sonnig</span>
+                    </button>
+                    <button class="env-weather-btn" id="btnWeather1" onclick="setQuickWeather(1)">
+                        <span class="weather-icon">⛅</span>
+                        <span class="weather-label">Heiter</span>
+                    </button>
+                    <button class="env-weather-btn" id="btnWeather2" onclick="setQuickWeather(2)">
+                        <span class="weather-icon">☁️</span>
+                        <span class="weather-label">Bewölkt</span>
+                    </button>
+                    <button class="env-weather-btn" id="btnWeather3" onclick="setQuickWeather(3)">
+                        <span class="weather-icon">🌧️</span>
+                        <span class="weather-label">Regen</span>
+                    </button>
+                    <button class="env-weather-btn" id="btnWeather4" onclick="setQuickWeather(4)">
+                        <span class="weather-icon">⛈️</span>
+                        <span class="weather-label">Gewitter</span>
+                    </button>
+                    <button class="env-weather-btn" id="btnWeather5" onclick="setQuickWeather(5)">
+                        <span class="weather-icon">🌫️</span>
+                        <span class="weather-label">Nebel</span>
+                    </button>
+                </div>
+            </div>
+            <!-- Besucher & Kassen Sektion -->
+            <div class="env-section">
+                <div class="env-section-title">
+                    <span>👥 BESUCHER-AUFKOMMEN</span>
+                    <label class="env-realtime-toggle">
+                        <input type="checkbox" id="envPeepsEnabledCheck" onchange="togglePeepsEnabled(this.checked)">
+                        <span>Besucher aktiv</span>
+                    </label>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 0.75rem; color: #9ca3af;">
+                    <span>Max. Besucherlimit:</span>
+                    <strong id="envMaxPeepsDisplay" style="color: #60a5fa; font-family: var(--font-mono);">300</strong>
+                </div>
+
+                <input type="range" min="0" max="5000" step="25" value="300" class="env-time-slider" id="envMaxPeepsSlider"
+                       style="background: linear-gradient(to right, #1e293b 0%, #3b82f6 50%, #10b981 100%); margin-bottom: 12px;"
+                       oninput="onMaxPeepsInput(this.value)" onchange="onMaxPeepsChange(this.value)">
+
+                <!-- Ticketpreis Kasse -->
+                <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #1f2937; padding-top: 10px; margin-top: 6px;">
+                    <div>
+                        <span style="font-family: var(--font-mono); font-size: 0.75rem; color: #9ca3af;">FAHRPREIS KASSE:</span>
+                        <div id="envTicketPriceVal" style="font-family: var(--font-mono); font-weight: 900; font-size: 1.1rem; color: #fbbf24;">4,50 €</div>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="env-preset-btn" style="padding: 6px 14px; font-size: 0.9rem;" onclick="changeTicketPrice(false)">➖ Günstiger</button>
+                        <button class="env-preset-btn" style="padding: 6px 14px; font-size: 0.9rem; background: #059669; border-color: #10b981;" onclick="changeTicketPrice(true)">➕ Teurer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================================================================
+         5. QR-CODE MODAL FÜR SMARTPHONE & TABLET
+         ====================================================================== -->
+    <div id="qrModalOverlay" class="env-modal-overlay" onclick="if(event.target===this) this.style.display='none';">
+        <div class="env-modal-card" style="max-width: 420px; text-align: center;">
+            <div class="env-modal-header">
+                <span class="env-modal-title">📱 MOBILES FAHRPULT (QR-CODE)</span>
+                <button class="env-modal-close" onclick="document.getElementById('qrModalOverlay').style.display='none';">✕</button>
+            </div>
+
+            <div style="background: #0b0f19; border: 1px solid #1f2937; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+                <p style="font-size: 0.8rem; color: #9ca3af; margin: 0 0 14px 0;">
+                    Scanne diesen Code mit der <strong>Kamera deines Handys oder Tablets</strong> (im selben WLAN):
+                </p>
+
+                <!-- QR-Code Bild direkt lokal als gestochen scharfe Vektorgrafik (100% offline & sofort sichtbar) -->
+                <div style="display: inline-block; background: #ffffff; padding: 12px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                    <img id="qrCodeImg" src="qr.svg" alt="QR-Code zum Scannen" style="width: 220px; height: 220px; display: block;">
+                </div>
+
+                <div style="margin-top: 14px;">
+                    <span style="font-family: var(--font-mono); font-size: 0.75rem; color: #64748b;">ODER DIREKT IM BROWSER EINGEBEN:</span>
+                    <div id="qrUrlDisplay" style="font-family: var(--font-mono); font-weight: 900; font-size: 0.95rem; color: #38bdf8; margin-top: 4px; word-break: break-all;">
+                        http://192.168.178.20:8080
+                    </div>
+                </div>
+            </div>
+
+            <button class="env-preset-btn" style="width: 100%; padding: 10px; font-size: 0.85rem;" onclick="document.getElementById('qrModalOverlay').style.display='none';">Schließen</button>
+        </div>
+    </div>
+
+    <!-- ======================================================================
+         6. JINGLE ➔ NPC-REAKTIONEN KONFIGURATIONS-MENÜ (AUTODRIVE)
+         ====================================================================== -->
+    <div id="jingleModalOverlay" class="env-modal-overlay" onclick="if(event.target===this) closeJingleModal();" style="display: none;">
+        <div class="env-modal-card" style="max-width: 680px; width: 95%; max-height: 86vh; display: flex; flex-direction: column;">
+            <div class="env-modal-header">
+                <span class="env-modal-title">🎵 JINGLE-ORDNER ➔ NPC-REAKTIONEN (AUTODRIVE)</span>
+                <button class="env-modal-close" onclick="closeJingleModal()">✕</button>
+            </div>
+
+            <div style="font-size: 0.78rem; color: #9ca3af; margin-bottom: 10px; line-height: 1.4;">
+                Hier werden alle Audiodateien aus deinem <strong>Fairground Online Jingles</strong> Ordner (Decks <strong>A–J</strong>) automatisch ausgelesen. Leg fest, wie die Fahrgäste (NPCs) im Fahrgeschäft reagieren sollen, sobald du während <strong>AutoDrive</strong> selbst einen Jingle abspielst:
+            </div>
+
+            <!-- Deck Filter & Suche -->
+            <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: space-between; margin-bottom: 10px; background: #09090b; border: 1px solid #1f2937; padding: 8px; border-radius: 6px;">
+                <div id="jingleDeckTabs" style="display: flex; flex-wrap: wrap; gap: 4px;">
+                    <button type="button" class="env-preset-btn active" onclick="filterJingleDeck('ALL')">Alle</button>
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <input type="text" id="jingleSearchInput" placeholder="🔍 Jingle suchen..." oninput="renderJingleList()" style="background: #18181b; color: #e4e4e7; border: 1px solid #3f3f46; border-radius: 4px; padding: 4px 8px; font-family: var(--font-mono); font-size: 0.75rem; width: 150px;">
+                    <button type="button" class="env-preset-btn" onclick="resetJingleDefaults()" title=" Intelligente Standard-Zuordnung wiederherstellen" style="font-size: 0.72rem; padding: 4px 8px;">🔄 Auto-Standards</button>
+                </div>
+            </div>
+
+            <!-- Scrollbare Jingle-Liste -->
+            <div id="jingleListContainer" style="flex: 1; overflow-y: auto; background: #0b0f19; border: 1px solid #1f2937; border-radius: 6px; padding: 8px; max-height: 52vh;">
+                <div style="text-align: center; color: #64748b; padding: 20px; font-family: var(--font-mono);">Lade Jingles aus Ordner...</div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; gap: 10px;">
+                <span id="jingleCountInfo" style="font-family: var(--font-mono); font-size: 0.75rem; color: #64748b;">0 Jingles gefunden</span>
+                <button class="env-preset-btn" style="padding: 8px 20px; font-size: 0.85rem; background: #0284c7; border-color: #38bdf8; color: #fff; font-weight: bold;" onclick="closeJingleModal()">✅ Fertig & Speichern</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js?v=1793271422794"></script>
+
+    </body>
+</html>

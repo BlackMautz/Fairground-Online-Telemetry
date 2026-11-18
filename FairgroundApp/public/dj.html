@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BEYOND BEATS // FESTIVAL STAGE CONTROL</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        :root {
+            --dj-primary: #a855f7;
+            --dj-accent: #06b6d4;
+            --dj-flame: #f97316;
+            --dj-co2: #0284c7;
+            --dj-glow: rgba(168, 85, 247, 0.4);
+        }
+
+        body.dj-theme {
+            background: radial-gradient(circle at 50% 20%, #1e1b4b 0%, #09090b 80%);
+            min-height: 100vh;
+            color: #f8fafc;
+        }
+
+        .dj-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 24px;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(168, 85, 247, 0.3);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+        }
+
+        .dj-logo-group {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .dj-logo-icon {
+            font-size: 2.2rem;
+            filter: drop-shadow(0 0 10px var(--dj-primary));
+        }
+
+        .dj-title-box h1 {
+            font-size: 1.4rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            margin: 0;
+            background: linear-gradient(135deg, #c084fc, #38bdf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .dj-title-box span {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+        }
+
+        .nav-back-btn {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid #475569;
+            color: #cbd5e1;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .nav-back-btn:hover {
+            border-color: #38bdf8;
+            color: #fff;
+            transform: translateY(-1px);
+        }
+
+        .dj-container {
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 0 20px 40px;
+            display: grid;
+            grid-template-columns: 340px 1fr 340px;
+            gap: 20px;
+        }
+
+        @media (max-width: 1100px) {
+            .dj-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .dj-card {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            border-radius: 14px;
+            padding: 18px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+            margin-bottom: 20px;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .card-title {
+            font-size: 0.85rem;
+            font-weight: 800;
+            letter-spacing: 1px;
+            color: #e2e8f0;
+            text-transform: uppercase;
+        }
+
+        /* Trigger Pads Grid */
+        .dj-pads-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .dj-pad {
+            height: 140px;
+            border-radius: 14px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.1s ease;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+            border: 2px solid transparent;
+        }
+
+        .dj-pad:active, .dj-pad.active {
+            transform: scale(0.97);
+            box-shadow: 0 0 30px currentColor;
+        }
+
+        .pad-co2 {
+            background: linear-gradient(135deg, #0284c7, #075985);
+            border-color: #38bdf8;
+            color: #38bdf8;
+        }
+
+        .pad-flame {
+            background: linear-gradient(135deg, #ea580c, #9a3412);
+            border-color: #fb923c;
+            color: #fb923c;
+        }
+
+        .pad-bubbles {
+            background: linear-gradient(135deg, #0d9488, #115e59);
+            border-color: #2dd4bf;
+            color: #2dd4bf;
+        }
+
+        .pad-strobe {
+            background: linear-gradient(135deg, #ca8a04, #854d0e);
+            border-color: #facc15;
+            color: #facc15;
+        }
+
+        .pad-icon {
+            font-size: 2.4rem;
+        }
+
+        .pad-title {
+            font-weight: 900;
+            font-size: 1.15rem;
+            color: #fff;
+            letter-spacing: 1.5px;
+        }
+
+        .pad-sub {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: 600;
+        }
+
+        /* Stage Lights Buttons Grid */
+        .stage-lighting-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .stage-light-btn {
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            border-radius: 10px;
+            padding: 14px 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: #f1f5f9;
+            font-weight: 700;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .stage-light-btn:hover {
+            border-color: #c084fc;
+            background: rgba(168, 85, 247, 0.25);
+        }
+
+        .stage-light-btn.active {
+            background: linear-gradient(135deg, #7c3aed, #a855f7);
+            border-color: #d8b4fe;
+            box-shadow: 0 0 20px rgba(168, 85, 247, 0.5);
+        }
+
+        .light-state-pill {
+            font-size: 0.65rem;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: #1e293b;
+            color: #94a3b8;
+        }
+
+        .stage-light-btn.active .light-state-pill {
+            background: #22c55e;
+            color: #022c22;
+            font-weight: 900;
+        }
+
+        /* Moving Heads Buttons & Sliders */
+        .mh-controls-box {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .mh-slider-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(15, 23, 42, 0.6);
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .mh-slider-label {
+            font-size: 0.75rem;
+            font-weight: bold;
+            color: #cbd5e1;
+            min-width: 110px;
+        }
+
+        .mh-slider-val {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #38bdf8;
+            min-width: 45px;
+            text-align: right;
+        }
+
+        .lights-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+
+        .light-prog-btn {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(168, 85, 247, 0.4);
+            color: #e2e8f0;
+            padding: 10px 4px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .light-prog-btn:hover {
+            background: rgba(168, 85, 247, 0.3);
+            border-color: #c084fc;
+        }
+
+        .light-prog-btn.active {
+            background: #a855f7;
+            color: white;
+            box-shadow: 0 0 15px rgba(168, 85, 247, 0.6);
+            border-color: #d8b4fe;
+        }
+
+        /* Color Prog Buttons */
+        .color-prog-btn {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            color: #e2e8f0;
+            padding: 10px 4px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .color-prog-btn:hover {
+            background: rgba(56, 189, 248, 0.3);
+            border-color: #7dd3fc;
+        }
+
+        .color-prog-btn.active {
+            background: #0284c7;
+            color: white;
+            box-shadow: 0 0 15px rgba(2, 132, 199, 0.6);
+            border-color: #38bdf8;
+        }
+
+        /* VU & Spectrum Display */
+        .spectrum-bar-wrap {
+            height: 120px;
+            display: flex;
+            align-items: flex-end;
+            gap: 4px;
+            padding: 10px;
+            background: #020617;
+            border-radius: 8px;
+            border: 1px solid #1e293b;
+            margin-bottom: 14px;
+        }
+
+        .spectrum-bar {
+            flex: 1;
+            background: linear-gradient(to top, #22c55e 0%, #eab308 65%, #ef4444 100%);
+            border-radius: 2px;
+            height: 5%;
+            transition: height 0.08s ease;
+        }
+
+        /* Toggle Button */
+        .dj-toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            background: rgba(30, 41, 59, 0.5);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+
+        .dj-toggle-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #cbd5e1;
+        }
+
+        .dj-status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ef4444;
+            display: inline-block;
+            margin-right: 6px;
+        }
+
+        .dj-status-dot.active {
+            background: #22c55e;
+            box-shadow: 0 0 10px #22c55e;
+        }
+    </style>
+</head>
+<body class="dj-theme">
+
+    <header class="dj-header">
+        <div class="dj-logo-group">
+            <span class="dj-logo-icon">🎧</span>
+            <div class="dj-title-box">
+                <h1>BEYOND BEATS</h1>
+                <span>Festival Stage Live Performance Console</span>
+            </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 14px;">
+            <div id="operatorBadge" class="mode-badge ready" style="padding: 6px 14px; font-weight: bold; border-radius: 6px;">
+                <span class="dj-status-dot" id="opDot"></span>
+                <span id="opText">PRÜFE STEUERPULT...</span>
+            </div>
+            <a href="index.html" class="nav-back-btn">
+                <span>🎡 ZUR FAHRPULT-ANSICHT</span>
+            </a>
+        </div>
+    </header>
+
+    <div class="dj-container">
+
+        <!-- LINKE SPALTE: SOUND2LIGHT & AUDIO ANALYSE -->
+        <div>
+            <div class="dj-card">
+                <div class="card-header" style="display: flex; align-items: center; justify-content: space-between;">
+                    <span class="card-title" style="color: #c084fc;">🎵 SOUND2LIGHT ENGINE</span>
+                    <button id="btnMasterS2L" class="pult-btn toggle-btn" style="margin: 0; padding: 6px 14px; font-weight: 900; font-size: 0.8rem; background: #374151; border: 2px solid #6b7280; border-radius: 6px; cursor: pointer;" onclick="toggleMasterS2L()">
+                        <span class="btn-text" id="txtMasterS2L" style="color: #fff;">🔴 S2L: AUS</span>
+                    </button>
+                </div>
+
+                <!-- Echte Audio Pegel Anzeige aus Unity Spectrum -->
+                <div class="spectrum-bar-wrap" id="spectrumContainer">
+                    <div class="spectrum-bar" id="barBass"></div>
+                    <div class="spectrum-bar" id="barEnergy"></div>
+                    <div class="spectrum-bar" id="bar3"></div>
+                    <div class="spectrum-bar" id="bar4"></div>
+                    <div class="spectrum-bar" id="bar5"></div>
+                    <div class="spectrum-bar" id="bar6"></div>
+                    <div class="spectrum-bar" id="bar7"></div>
+                    <div class="spectrum-bar" id="bar8"></div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: #94a3b8; margin-bottom: 12px; font-family: var(--font-mono);">
+                    <span>BASS: <strong id="valLiveBass" style="color:#38bdf8;">0.00</strong></span>
+                    <span>ENERGY: <strong id="valLiveEnergy" style="color:#22c55e;">0.00</strong></span>
+                </div>
+
+                <div style="margin-top: 14px;">
+                    <div class="dj-toggle-row" style="background: rgba(234, 179, 8, 0.2); border: 1px solid rgba(250, 204, 21, 0.5); border-radius: 8px;">
+                        <span class="dj-toggle-label" style="color: #fde047; font-weight: bold;">⚡ AUTOMATISCHES STROBO (BEAT)</span>
+                        <input type="checkbox" id="chkS2lStrobo" checked style="width: 20px; height: 20px; cursor: pointer;" onchange="updateS2L('s2lStrobo', this.checked)">
+                    </div>
+                    <div class="dj-toggle-row">
+                        <span class="dj-toggle-label">🔥 S2L PYRO FLAMMEN</span>
+                        <input type="checkbox" id="chkS2lFlame" checked onchange="updateS2L('s2lFlame', this.checked)">
+                    </div>
+                    <div class="dj-toggle-row">
+                        <span class="dj-toggle-label">💨 S2L CO2 JETS</span>
+                        <input type="checkbox" id="chkS2lFog" checked onchange="updateS2L('s2lFog', this.checked)">
+                    </div>
+                    <div class="dj-toggle-row">
+                        <span class="dj-toggle-label">🫧 S2L SEIFENBLASEN</span>
+                        <input type="checkbox" id="chkS2lBubble" checked onchange="updateS2L('s2lBubble', this.checked)">
+                    </div>
+                    <div class="dj-toggle-row">
+                        <span class="dj-toggle-label">💡 S2L MOVING HEADS</span>
+                        <input type="checkbox" id="chkS2lLED" checked onchange="updateS2L('s2lLED', this.checked)">
+                    </div>
+                    <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <div style="font-size: 0.75rem; font-weight: bold; color: #c084fc; margin-bottom: 8px;">BÜHNEN-S2L EINZELSCHALTER:</div>
+                        <div class="dj-toggle-row">
+                            <span class="dj-toggle-label">🗼 TOWER LIGHTS IM BEAT</span>
+                            <input type="checkbox" id="chkS2lTowerLights" checked onchange="updateS2L('s2lTowerLights', this.checked)">
+                        </div>
+                        <div class="dj-toggle-row">
+                            <span class="dj-toggle-label">🔆 UPPER LIGHTS IM BEAT</span>
+                            <input type="checkbox" id="chkS2lUpperLights" checked onchange="updateS2L('s2lUpperLights', this.checked)">
+                        </div>
+                        <div class="dj-toggle-row">
+                            <span class="dj-toggle-label">🏮 IN-LIGHTS IM BEAT</span>
+                            <input type="checkbox" id="chkS2lInLights" checked onchange="updateS2L('s2lInLights', this.checked)">
+                        </div>
+                        <div class="dj-toggle-row">
+                            <span class="dj-toggle-label">📺 LED LEINWAND IM BEAT</span>
+                            <input type="checkbox" id="chkS2lLedWall" checked onchange="updateS2L('s2lLedWall', this.checked)">
+                        </div>
+                        <div class="dj-toggle-row">
+                            <span class="dj-toggle-label">✨ LAUFLICHTER (TEXTUR) IM BEAT</span>
+                            <input type="checkbox" id="chkS2lTexAnim" checked onchange="updateS2L('s2lTexAnim', this.checked)">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MITTLERE SPALTE: BÜHNEN-LICHTGRUPPEN & LIVE FX PERFORMANCE PADS -->
+        <div>
+            <!-- BÜHNEN-LICHTGRUPPEN & LED-WALL -->
+            <div class="dj-card">
+                <div class="card-header">
+                    <span class="card-title">💡 BÜHNEN-LICHTGRUPPEN & LED-WALL</span>
+                    <span style="font-size: 0.75rem; color: #c084fc; font-weight: bold;">STAGE LIGHTING</span>
+                </div>
+                
+                <div class="stage-lighting-grid">
+                    <!-- Tower Lights -->
+                    <button class="stage-light-btn" id="btnTowerLights" onclick="toggleStageLight('stageTowerLights', this)">
+                        <span>🗼 TOWER LIGHTS</span>
+                        <span class="light-state-pill">TOGGLE</span>
+                    </button>
+
+                    <!-- Upper Lights (Traverse) -->
+                    <button class="stage-light-btn" id="btnUpperLights" onclick="toggleStageLight('stageUpperLights', this)">
+                        <span>🔆 UPPER LIGHTS</span>
+                        <span class="light-state-pill">TOGGLE</span>
+                    </button>
+
+                    <!-- In Lights (Bühne Innen) -->
+                    <button class="stage-light-btn" id="btnInLights" onclick="toggleStageLight('stageInLights', this)">
+                        <span>🏮 IN-LIGHTS (INNEN)</span>
+                        <span class="light-state-pill">TOGGLE</span>
+                    </button>
+
+                    <!-- LED Wall Controller & Display -->
+                    <button class="stage-light-btn" id="btnLedWall" onclick="toggleStageLight('stageLedWall', this)">
+                        <span>📺 LED VIDEOWALL</span>
+                        <span class="light-state-pill">TOGGLE</span>
+                    </button>
+
+                    <!-- Texture Animation Controller -->
+                    <button class="stage-light-btn" id="btnTexAnim" style="grid-column: span 2;" onclick="toggleStageLight('stageTexAnim', this)">
+                        <span>✨ TEXTURE ANIMATION (CHASER)</span>
+                        <span class="light-state-pill">TOGGLE</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- LIVE FX PERFORMANCE PADS -->
+            <div class="dj-pads-grid">
+                <!-- CO2 Blaster -->
+                <div class="dj-pad pad-co2" id="padCo2"
+                     onmousedown="triggerPad('stageCo2', true)" onmouseup="triggerPad('stageCo2', false)"
+                     ontouchstart="triggerPad('stageCo2', true)" ontouchend="triggerPad('stageCo2', false)">
+                    <span class="pad-icon">💨</span>
+                    <span class="pad-title">CO2 BLASTER</span>
+                    <span class="pad-sub" id="subCo2">GEDRÜCKT HALTEN FÜR JET</span>
+                </div>
+
+                <!-- Pyro Flame -->
+                <div class="dj-pad pad-flame" id="padFlame"
+                     onmousedown="triggerPad('stageFlame', true)" onmouseup="triggerPad('stageFlame', false)"
+                     ontouchstart="triggerPad('stageFlame', true)" ontouchend="triggerPad('stageFlame', false)">
+                    <span class="pad-icon">🔥</span>
+                    <span class="pad-title">PYRO FLAMMEN</span>
+                    <span class="pad-sub" id="subFlame">GEDRÜCKT HALTEN FÜR FEUER</span>
+                </div>
+
+                <!-- Bubbles -->
+                <div class="dj-pad pad-bubbles" id="padBubbles"
+                     onmousedown="triggerPad('stageBubbles', true)" onmouseup="triggerPad('stageBubbles', false)"
+                     ontouchstart="triggerPad('stageBubbles', true)" ontouchend="triggerPad('stageBubbles', false)">
+                    <span class="pad-icon">🫧</span>
+                    <span class="pad-title">BUBBLE CANNON</span>
+                    <span class="pad-sub" id="subBubbles">SEIFENBLASEN JET</span>
+                </div>
+
+                <!-- Strobe Blinder -->
+                <div class="dj-pad pad-strobe" id="padStrobe"
+                     onmousedown="triggerPad('stageStrobo', true)" onmouseup="triggerPad('stageStrobo', false)"
+                     ontouchstart="triggerPad('stageStrobo', true)" ontouchend="triggerPad('stageStrobo', false)">
+                    <span class="pad-icon">⚡</span>
+                    <span class="pad-title">STAGE STROBO</span>
+                    <span class="pad-sub" id="subStrobo">BLINDER FLASH EFFEKT</span>
+                </div>
+            </div>
+
+            <!-- MOVING HEADS: BEWEGUNG, FARBE & GESCHWINDIGKEIT -->
+            <!-- 1. BÜHNEN SCHEINWERFER / SPOTS FARBPROGRAMME -->
+            <div class="dj-card">
+                <div class="card-header">
+                    <span class="card-title">💡 SCHEINWERFER / SPOTS FARBPROGRAMME</span>
+                    <span style="font-size: 0.75rem; color: #38bdf8; font-weight: bold;">LIGHTS CONTROLLER</span>
+                </div>
+                <div style="font-size: 0.75rem; font-weight: bold; color: #94a3b8; margin-bottom: 8px;">AKTIVES SCHEINWERFER-PROGRAMM:</div>
+                <div class="lights-grid" id="ledProgramsContainer">
+                    <!-- Dynamisch befüllt durch ledProgNames -->
+                </div>
+            </div>
+
+            <!-- 2. ECHTE LEDS FARBPROGRAMME & CHASER (TEXTURE ANIMATION) -->
+            <div class="dj-card" style="border: 1px solid rgba(56, 189, 248, 0.4);">
+                <div class="card-header">
+                    <span class="card-title">🌈 LED'S FARBEN & LAUFLICHTER</span>
+                    <span style="font-size: 0.75rem; color: #38bdf8; font-weight: bold;">TEXTURE & LED CHASER</span>
+                </div>
+                <div style="font-size: 0.75rem; font-weight: bold; color: #38bdf8; margin-bottom: 8px;">🎨 LED FARBPROGRAMM:</div>
+                <div class="lights-grid" id="ledColorProgContainer">
+                    <div style="color: #64748b; font-size: 0.8rem; padding: 10px;">Lade LED Farbprogramme...</div>
+                </div>
+                <div style="font-size: 0.75rem; font-weight: bold; color: #a855f7; margin-top: 14px; margin-bottom: 8px;">⚡ LED LAUFLICHT-MUSTER (CHASER):</div>
+                <div class="lights-grid" id="chaserProgContainer">
+                    <div style="color: #64748b; font-size: 0.8rem; padding: 10px;">Lade Chaser Muster...</div>
+                </div>
+            </div>
+
+            <!-- 3. LED VIDEOWALL CONTROLLER (LEINWAND) -->
+            <div class="dj-card" style="border: 1px solid rgba(168, 85, 247, 0.4);">
+                <div class="card-header">
+                    <span class="card-title">📺 LED LEINWAND / VIDEOWALL</span>
+                    <span style="font-size: 0.75rem; color: #c084fc; font-weight: bold;">WALL DISPLAY CONTROLLER</span>
+                </div>
+                <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 12px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
+                    <button class="stage-light-btn" id="btnWallTogglePower" style="margin: 0; min-width: 140px;" onclick="toggleStageLight('stageLedWall', this)">
+                        <span>AN / AUS</span>
+                    </button>
+                    <div style="flex: 1; display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 0.8rem; color: #94a3b8; font-weight: bold;">SPEED:</span>
+                        <input type="range" id="wallSpeedSlider" min="0.1" max="4.0" step="0.1" value="1.0" style="flex: 1;" oninput="sendCmd({ setLedWallSpeed: parseFloat(this.value) })">
+                        <span id="wallSpeedVal" style="font-size: 0.85rem; color: #38bdf8; font-weight: bold; min-width: 40px;">1.0x</span>
+                    </div>
+                </div>
+                <div style="font-size: 0.75rem; font-weight: bold; color: #c084fc; margin-bottom: 8px;">🎬 VIDEOWALL GRAFIK-PROGRAMM:</div>
+                <div class="lights-grid" id="ledWallProgContainer">
+                    <div style="color: #64748b; font-size: 0.8rem; padding: 10px;">Lade Video Programme...</div>
+                </div>
+            </div>
+
+            <div class="dj-card">
+                <div class="card-header">
+                    <span class="card-title">💡 MOVING HEADS MASTER CONTROL</span>
+                    <span style="font-size: 0.75rem; color: #a855f7; font-weight: bold;">BEWEGUNG & FARBE</span>
+                </div>
+
+                <div class="mh-controls-box">
+                    <!-- Geschwindigkeits-Regler -->
+                    <div class="mh-slider-row">
+                        <span class="mh-slider-label">⚡ GESCHWINDIGKEIT</span>
+                        <input type="range" min="1" max="100" value="50" style="flex:1;" id="rangeMhSpeed" oninput="setMhSpeed(this.value)">
+                        <span class="mh-slider-val" id="valMhSpeed">50%</span>
+                    </div>
+
+                    <!-- Bewegungsprogramme (Moving Head Progs) -->
+                    <div>
+                        <div style="font-size: 0.75rem; font-weight: bold; color: #94a3b8; margin-bottom: 6px;">BEWEGUNGSMUSTER (PROGRAMM)</div>
+                        <div class="lights-grid" id="mhButtonsContainer">
+                            <button class="light-prog-btn" onclick="sendCmd({ mhProg: 0 })">PROG 1</button>
+                            <button class="light-prog-btn" onclick="sendCmd({ mhProg: 1 })">PROG 2</button>
+                            <button class="light-prog-btn" onclick="sendCmd({ mhProg: 2 })">PROG 3</button>
+                            <button class="light-prog-btn" onclick="sendCmd({ mhProg: 3 })">PROG 4</button>
+                            <button class="light-prog-btn" onclick="sendCmd({ mhProg: 4 })">PROG 5</button>
+                            <button class="light-prog-btn" onclick="sendCmd({ mhProg: 5 })">PROG 6</button>
+                            <button class="light-prog-btn" onclick="sendCmd({ mhProg: 6 })">PROG 7</button>
+                            <button class="light-prog-btn" onclick="sendCmd({ mhProg: 7 })">PROG 8</button>
+                        </div>
+                    </div>
+
+                    <!-- Farbprogramme (Color Progs) -->
+                    <div>
+                        <div style="font-size: 0.75rem; font-weight: bold; color: #94a3b8; margin-bottom: 6px;">LICHTFARBEN (COLOR PROG)</div>
+                        <div class="lights-grid" id="mhColorButtonsContainer">
+                            <button class="color-prog-btn" onclick="sendCmd({ mhColorProg: 0 })">WEISS</button>
+                            <button class="color-prog-btn" onclick="sendCmd({ mhColorProg: 1 })">ROT</button>
+                            <button class="color-prog-btn" onclick="sendCmd({ mhColorProg: 2 })">BLAU</button>
+                            <button class="color-prog-btn" onclick="sendCmd({ mhColorProg: 3 })">GRÜN</button>
+                            <button class="color-prog-btn" onclick="sendCmd({ mhColorProg: 4 })">GELB</button>
+                            <button class="color-prog-btn" onclick="sendCmd({ mhColorProg: 5 })">MAGENTA</button>
+                            <button class="color-prog-btn" onclick="sendCmd({ mhColorProg: 6 })">CYAN</button>
+                            <button class="color-prog-btn" onclick="sendCmd({ mhColorProg: 7 })">MULTI</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RECHTE SPALTE: ECHTE BESUCHER-INTERAKTIONEN (Peep_Interaction_Controller) -->
+        <div>
+            <div class="dj-card">
+                <div class="card-header">
+                    <span class="card-title">👥 CROWD & INTERAKTION</span>
+                    <span style="font-size: 0.75rem; color: #38bdf8;">PEEP CONTROLLER</span>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <button class="reko-btn" id="btnPeepHands" style="height: 70px; background: #3b82f6; border: 2px solid #60a5fa; border-radius: 10px; font-weight: bold; color: white;" onclick="sendCmd({ peepHandsUp: true })">
+                        🙌 HANDS UP (HÄNDE HOCH!)
+                    </button>
+                    <button class="reko-btn" id="btnPeepClap" style="height: 70px; background: #10b981; border: 2px solid #34d399; border-radius: 10px; font-weight: bold; color: white;" onclick="sendCmd({ peepClap: true })">
+                        👏 APPLAUS & JUBELN
+                    </button>
+                    <button class="reko-btn" id="btnPeepScream" style="height: 70px; background: #ec4899; border: 2px solid #f472b6; border-radius: 10px; font-weight: bold; color: white;" onclick="sendCmd({ peepScream: true })">
+                        🎉 JUBEL-SCHREI
+                    </button>
+                    <button class="reko-btn" style="height: 60px; background: #64748b; border: 1px solid #94a3b8; border-radius: 10px; font-weight: bold; color: white;" onclick="sendCmd({ peepHandsUp: false, peepClap: false })">
+                        ⏹️ CROWD RESET (NORMAL)
+                    </button>
+                </div>
+
+                <!-- ECHTE Weltzeit & Wetter Steuerung im Spiel -->
+                <div style="margin-top: 24px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <div style="font-size: 0.8rem; font-weight: bold; color: #94a3b8; margin-bottom: 8px;">INGAME ZEIT & WETTER</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <button class="pult-btn btn-tiny" onclick="sendCmd({ setWorldTime: 23.0 })">🌙 NACHT (23:00)</button>
+                        <button class="pult-btn btn-tiny" onclick="sendCmd({ setWorldTime: 14.0 })">☀️ TAG (14:00)</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const lightStates = {
+            stageTowerLights: false,
+            stageUpperLights: false,
+            stageInLights: false,
+            stageLedWall: false,
+            stageTexAnim: false
+        };
+
+        function sendCmd(cmd) {
+            fetch('/api/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(cmd)
+            }).catch(err => console.error(err));
+        }
+
+        let masterS2LState = false;
+        function toggleMasterS2L() {
+            masterS2LState = !masterS2LState;
+            sendCmd({ setS2LLight: masterS2LState });
+        }
+
+        function setMhSpeed(val) {
+            document.getElementById('valMhSpeed').textContent = val + '%';
+            sendCmd({ mhSpeed: val / 100 });
+        }
+
+        function toggleStageLight(name, btnEl) {
+            lightStates[name] = !lightStates[name];
+            btnEl.classList.toggle('active', lightStates[name]);
+            const pill = btnEl.querySelector('.light-state-pill');
+            if (pill) pill.textContent = lightStates[name] ? 'AN' : 'AUS';
+            
+            const cmd = {};
+            cmd[name] = lightStates[name];
+            sendCmd(cmd);
+        }
+
+        function triggerPad(action, state) {
+            const cmd = {};
+            cmd[action] = state;
+            if (action === 'stageCo2') cmd.setFog = state;
+            if (action === 'stageFlame') cmd.setFlame = state;
+            if (action === 'stageBubbles') cmd.setBubbles = state;
+            if (action === 'stageStrobo') cmd.setStrobo = state;
+            sendCmd(cmd);
+        }
+
+        function updateS2L(key, val) {
+            const cmd = {};
+            cmd[key] = val;
+            sendCmd(cmd);
+        }
+
+        // 100% ECHTE LIVE-TELEMETRIE AUS DEM SPIEL:
+        setInterval(() => {
+            fetch('/api/state')
+                .then(r => r.json())
+                .then(st => {
+                    const tel = st.telemetry || {};
+                    const op = tel.operator || {};
+                    const dot = document.getElementById('opDot');
+                    const text = document.getElementById('opText');
+
+                    // 1. Echter Operator Sitz-Status
+                    if (op.hasOperator || op.djSeated || op.activeRide === 'dj') {
+                        dot.className = 'dj-status-dot active';
+                        text.textContent = 'DJ AM PULT: ' + (op.name || 'OPERATOR');
+                    } else {
+                        dot.className = 'dj-status-dot';
+                        text.textContent = 'PULT UNBESETZT (OPERATOR LOCK)';
+                    }
+
+                    // 2. Echter Bass & Energy aus s2lBass oder liveBass:
+                    const bass = (tel.s2lBass !== undefined) ? tel.s2lBass : (tel.liveBass || 0);
+                    const energy = (tel.s2lEnergy !== undefined) ? tel.s2lEnergy : (tel.liveEnergy || 0);
+                    document.getElementById('valLiveBass').textContent = bass.toFixed(3);
+                    document.getElementById('valLiveEnergy').textContent = energy.toFixed(3);
+
+                    // Master S2L Status Button synchronisieren
+                    const btnS2L = document.getElementById('btnMasterS2L');
+                    const txtS2L = document.getElementById('txtMasterS2L');
+                    if (btnS2L && txtS2L) {
+                        if (tel.s2lLightActive) {
+                            btnS2L.style.background = '#16a34a';
+                            btnS2L.style.borderColor = '#4ade80';
+                            btnS2L.style.boxShadow = '0 0 15px rgba(34, 197, 94, 0.6)';
+                            txtS2L.textContent = '🟢 S2L: AKTIV';
+                        } else {
+                            btnS2L.style.background = '#374151';
+                            btnS2L.style.borderColor = '#6b7280';
+                            btnS2L.style.boxShadow = 'none';
+                            txtS2L.textContent = '🔴 S2L: AUS';
+                        }
+                    }
+
+                    // Echte Audio Spectrum Balken rendern
+                    const bBass = document.getElementById('barBass');
+                    const bEnergy = document.getElementById('barEnergy');
+                    if (bBass) bBass.style.height = Math.min(100, Math.max(5, bass * 120)) + '%';
+                    if (bEnergy) bEnergy.style.height = Math.min(100, Math.max(5, energy * 150)) + '%';
+
+                    const b3 = document.getElementById('bar3');
+                    const b4 = document.getElementById('bar4');
+                    const b5 = document.getElementById('bar5');
+                    const b6 = document.getElementById('bar6');
+                    const b7 = document.getElementById('bar7');
+                    const b8 = document.getElementById('bar8');
+                    // Checkboxen mit Telemetrie synchronisieren falls vom Spiel/Server aktualisiert
+                    if (tel.s2lStrobo !== undefined && document.getElementById('chkS2lStrobo'))
+                        document.getElementById('chkS2lStrobo').checked = !!tel.s2lStrobo;
+                    if (tel.s2lTowerLights !== undefined && document.getElementById('chkS2lTowerLights'))
+                        document.getElementById('chkS2lTowerLights').checked = !!tel.s2lTowerLights;
+                    if (tel.s2lUpperLights !== undefined && document.getElementById('chkS2lUpperLights'))
+                        document.getElementById('chkS2lUpperLights').checked = !!tel.s2lUpperLights;
+                    if (tel.s2lInLights !== undefined && document.getElementById('chkS2lInLights'))
+                        document.getElementById('chkS2lInLights').checked = !!tel.s2lInLights;
+                    if (tel.s2lLedWall !== undefined && document.getElementById('chkS2lLedWall'))
+                        document.getElementById('chkS2lLedWall').checked = !!tel.s2lLedWall;
+                    if (tel.s2lTexAnim !== undefined && document.getElementById('chkS2lTexAnim'))
+                        document.getElementById('chkS2lTexAnim').checked = !!tel.s2lTexAnim;
+                    if (b3) b3.style.height = Math.min(100, Math.max(5, (bass * 0.8 + energy * 0.4) * 100)) + '%';
+                    if (b4) b4.style.height = Math.min(100, Math.max(5, (energy * 0.9) * 100)) + '%';
+                    if (b5) b5.style.height = Math.min(100, Math.max(5, (energy * 0.7) * 100)) + '%';
+                    if (b6) b6.style.height = Math.min(100, Math.max(5, (energy * 0.5) * 100)) + '%';
+                    if (b7) b7.style.height = Math.min(100, Math.max(5, (energy * 0.3) * 100)) + '%';
+                    if (b8) b8.style.height = Math.min(100, Math.max(5, (energy * 0.2) * 100)) + '%';
+
+                    // 3. Echter Live Status der Effekte aus dem Spiel anzeigen
+                    const padCo2 = document.getElementById('padCo2');
+                    const padFlame = document.getElementById('padFlame');
+                    const padBubbles = document.getElementById('padBubbles');
+                    const padStrobe = document.getElementById('padStrobe');
+
+                    if (tel.fogOn) {
+                        padCo2?.classList.add('active');
+                        document.getElementById('subCo2').textContent = 'JET AKTIV (FEUERT)';
+                    } else {
+                        padCo2?.classList.remove('active');
+                        document.getElementById('subCo2').textContent = 'GEDRÜCKT HALTEN FÜR JET';
+                    }
+
+                    if (tel.flameOn) {
+                        padFlame?.classList.add('active');
+                        document.getElementById('subFlame').textContent = 'FEUER AKTIV (FEUERT)';
+                    } else {
+                        padFlame?.classList.remove('active');
+                        document.getElementById('subFlame').textContent = 'GEDRÜCKT HALTEN FÜR FEUER';
+                    }
+
+                    if (tel.bubblesOn) {
+                        padBubbles?.classList.add('active');
+                        document.getElementById('subBubbles').textContent = 'SEIFENBLASEN AKTIV';
+                    } else {
+                        padBubbles?.classList.remove('active');
+                        document.getElementById('subBubbles').textContent = 'SEIFENBLASEN JET';
+                    }
+
+                    if (tel.stroboOn) {
+                        padStrobe?.classList.add('active');
+                        document.getElementById('subStrobo').textContent = 'STROBO AKTIV (BLITZT)';
+                    } else {
+                        padStrobe?.classList.remove('active');
+                        document.getElementById('subStrobo').textContent = 'BLINDER FLASH EFFEKT';
+                    }
+
+                    // 4. Moving Heads Programme live Highlighten & Namen rendern
+                    if (tel.mhProgNames && Array.isArray(tel.mhProgNames) && tel.mhProgNames.length > 0) {
+                        const container = document.getElementById('mhButtonsContainer');
+                        if (container && container.getAttribute('data-loaded') !== 'true') {
+                            container.setAttribute('data-loaded', 'true');
+                            container.innerHTML = '';
+                            tel.mhProgNames.forEach((name, idx) => {
+                                const btn = document.createElement('button');
+                                btn.className = 'light-prog-btn' + (tel.mhProg === idx ? ' active' : '');
+                                btn.textContent = name;
+                                btn.onclick = () => sendCmd({ mhProg: idx });
+                                container.appendChild(btn);
+                            });
+                        }
+                    }
+
+                    // 5. Moving Heads Color Programme live Highlighten & Namen rendern
+                    // 5b. Scheinwerfer Programme live Highlighten & Namen rendern
+                    if (tel.ledProgNames && Array.isArray(tel.ledProgNames) && tel.ledProgNames.length > 0) {
+                        const ledCont = document.getElementById('ledProgramsContainer');
+                        if (ledCont && ledCont.getAttribute('data-loaded') !== 'true') {
+                            ledCont.setAttribute('data-loaded', 'true');
+                            ledCont.innerHTML = '';
+                            tel.ledProgNames.forEach((name, idx) => {
+                                const btn = document.createElement('button');
+                                btn.className = 'light-prog-btn' + (tel.cLightProgIndex === idx ? ' active' : '');
+                                btn.textContent = name;
+                                btn.onclick = () => sendCmd({ setLightProg: idx });
+                                ledCont.appendChild(btn);
+                            });
+                        } else if (ledCont) {
+                            const btns = ledCont.querySelectorAll('.light-prog-btn');
+                            btns.forEach((btn, idx) => {
+                                btn.classList.toggle('active', tel.cLightProgIndex === idx);
+                            });
+                        }
+                    }
+
+                    // 5c. Echte LED Farben Programme (Texture Animation)
+                    if (tel.ledColorProgNames && Array.isArray(tel.ledColorProgNames) && tel.ledColorProgNames.length > 0) {
+                        const colCont = document.getElementById('ledColorProgContainer');
+                        if (colCont && colCont.getAttribute('data-loaded') !== 'true') {
+                            colCont.setAttribute('data-loaded', 'true');
+                            colCont.innerHTML = '';
+                            tel.ledColorProgNames.forEach((name, idx) => {
+                                const btn = document.createElement('button');
+                                btn.className = 'light-prog-btn' + (tel.ledColorProgIndex === idx ? ' active' : '');
+                                btn.textContent = name;
+                                btn.onclick = () => sendCmd({ setLedColorProg: idx });
+                                colCont.appendChild(btn);
+                            });
+                        } else if (colCont) {
+                            const btns = colCont.querySelectorAll('.light-prog-btn');
+                            btns.forEach((btn, idx) => {
+                                btn.classList.toggle('active', tel.ledColorProgIndex === idx);
+                            });
+                        }
+                    }
+
+                    // 5d. Chaser Lauflicht-Muster
+                    if (tel.chaserProgNames && Array.isArray(tel.chaserProgNames) && tel.chaserProgNames.length > 0) {
+                        const chaserCont = document.getElementById('chaserProgContainer');
+                        if (chaserCont && chaserCont.getAttribute('data-loaded') !== 'true') {
+                            chaserCont.setAttribute('data-loaded', 'true');
+                            chaserCont.innerHTML = '';
+                            tel.chaserProgNames.forEach((name, idx) => {
+                                const btn = document.createElement('button');
+                                btn.className = 'light-prog-btn' + (tel.chaserProgIndex === idx ? ' active' : '');
+                                btn.textContent = name;
+                                btn.onclick = () => sendCmd({ setChaserProg: idx });
+                                chaserCont.appendChild(btn);
+                            });
+                        } else if (chaserCont) {
+                            const btns = chaserCont.querySelectorAll('.light-prog-btn');
+                            btns.forEach((btn, idx) => {
+                                btn.classList.toggle('active', tel.chaserProgIndex === idx);
+                            });
+                        }
+                    }
+
+                    // 5e. LED Videowall (Leinwand) Programme & Speed
+                    if (tel.ledWallSpeed !== undefined && document.getElementById('wallSpeedSlider')) {
+                        const slider = document.getElementById('wallSpeedSlider');
+                        if (document.activeElement !== slider) slider.value = tel.ledWallSpeed;
+                        const valText = document.getElementById('wallSpeedVal');
+                        if (valText) valText.textContent = tel.ledWallSpeed.toFixed(1) + 'x';
+                    }
+                    if (tel.ledWallProgNames && Array.isArray(tel.ledWallProgNames) && tel.ledWallProgNames.length > 0) {
+                        const wallCont = document.getElementById('ledWallProgContainer');
+                        if (wallCont && wallCont.getAttribute('data-loaded') !== 'true') {
+                            wallCont.setAttribute('data-loaded', 'true');
+                            wallCont.innerHTML = '';
+                            tel.ledWallProgNames.forEach((name, idx) => {
+                                const btn = document.createElement('button');
+                                btn.className = 'light-prog-btn' + (tel.ledWallProgIndex === idx ? ' active' : '');
+                                btn.textContent = name;
+                                btn.onclick = () => sendCmd({ setLedWallProg: idx });
+                                wallCont.appendChild(btn);
+                            });
+                        } else if (wallCont) {
+                            const btns = wallCont.querySelectorAll('.light-prog-btn');
+                            btns.forEach((btn, idx) => {
+                                btn.classList.toggle('active', tel.ledWallProgIndex === idx);
+                            });
+                        }
+                    }
+
+                    if (tel.mhColorProgNames && Array.isArray(tel.mhColorProgNames) && tel.mhColorProgNames.length > 0) {
+                        const colContainer = document.getElementById('mhColorButtonsContainer');
+                        if (colContainer && colContainer.getAttribute('data-loaded') !== 'true') {
+                            colContainer.setAttribute('data-loaded', 'true');
+                            colContainer.innerHTML = '';
+                            tel.mhColorProgNames.forEach((name, idx) => {
+                                const btn = document.createElement('button');
+                                btn.className = 'color-prog-btn' + (tel.mhColorProg === idx ? ' active' : '');
+                                btn.textContent = name;
+                                btn.onclick = () => sendCmd({ mhColorProg: idx });
+                                colContainer.appendChild(btn);
+                            });
+                        }
+                    }
+
+                    // 6. Echte Live-Geschwindigkeit des Moving Head Sliders synchronisieren
+                    if (tel.mhSpeed !== undefined) {
+                        const slider = document.getElementById('rangeMhSpeed');
+                        const valText = document.getElementById('valMhSpeed');
+                        if (slider && document.activeElement !== slider) {
+                            const pct = Math.round(tel.mhSpeed * 100);
+                            slider.value = pct;
+                            if (valText) valText.textContent = pct + '%';
+                        }
+                    }
+
+                    // 7. Echter Live-Zustand der Peep Interaktionen
+                    const btnHands = document.getElementById('btnPeepHands');
+                    const btnClap = document.getElementById('btnPeepClap');
+                    if (btnHands) btnHands.style.opacity = tel.peepHandsUp ? '1.0' : '0.8';
+                    if (btnClap) btnClap.style.opacity = tel.peepClap ? '1.0' : '0.8';
+                })
+                .catch(() => {});
+        }, 200);
+    </script>
+</body>
+</html>

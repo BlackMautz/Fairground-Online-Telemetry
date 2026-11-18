@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Handbuch & Funktionsübersicht — Fairground Master Console</title>
+    <link rel="stylesheet" href="style.css?v=8">
+    <style>
+        body.help-page {
+            background-color: var(--chassis-bg);
+            color: var(--text-primary);
+            font-family: var(--font-ui);
+            min-height: 100vh;
+            overflow-y: auto;
+            user-select: text;
+            -webkit-user-select: text;
+            background-image:
+                radial-gradient(circle at 50% 0%, rgba(0, 229, 255, 0.06) 0%, transparent 65%),
+                linear-gradient(180deg, #0b0f16 0%, #06080c 100%);
+        }
+        .help-container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 28px 24px 60px 24px;
+        }
+        .help-top-bar {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            background: linear-gradient(180deg, #161c28 0%, #0e131d 100%);
+            border: 2px solid #222d3e;
+            border-radius: 12px;
+            padding: 18px 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+        }
+        .help-title-wrap h1 {
+            font-size: 1.45rem;
+            font-weight: 900;
+            letter-spacing: 1.5px;
+            color: #fff;
+            text-shadow: 0 0 14px rgba(0, 229, 255, 0.35);
+            margin-bottom: 4px;
+        }
+        .help-title-wrap p {
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            color: var(--led-cyan);
+            letter-spacing: 1px;
+        }
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+            border: 2px solid var(--led-cyan);
+            color: #fff;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            font-weight: 900;
+            padding: 10px 18px;
+            border-radius: 8px;
+            text-decoration: none;
+            box-shadow: 0 0 14px rgba(0, 229, 255, 0.35);
+            transition: all 0.15s ease;
+        }
+        .back-btn:hover {
+            background: var(--led-cyan);
+            color: #05070a;
+            box-shadow: 0 0 22px rgba(0, 229, 255, 0.75);
+        }
+        .help-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 20px;
+        }
+        .help-card {
+            background: var(--panel-base);
+            border: 2px solid #202b3d;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .help-card.full-width {
+            grid-column: 1 / -1;
+        }
+        .help-card-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #1a2332;
+            padding-bottom: 10px;
+        }
+        .help-card-head h2 {
+            font-family: var(--font-mono);
+            font-size: 1rem;
+            font-weight: 900;
+            color: #fff;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .help-tag {
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            font-weight: 900;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background: rgba(0, 229, 255, 0.12);
+            color: var(--led-cyan);
+            border: 1px solid rgba(0, 229, 255, 0.35);
+        }
+        .help-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .help-list li {
+            background: #090d14;
+            border: 1px solid #1c2636;
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 0.85rem;
+            line-height: 1.45;
+            color: #cbd5e1;
+        }
+        .help-list li strong {
+            color: #fff;
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+        }
+        .badge-inline {
+            display: inline-block;
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            font-weight: 800;
+            padding: 1px 6px;
+            border-radius: 4px;
+            margin-right: 4px;
+        }
+        .b-green { background: rgba(0, 255, 115, 0.15); color: #00ff73; border: 1px solid #00ff73; }
+        .b-amber { background: rgba(245, 158, 11, 0.18); color: #fbbf24; border: 1px solid #f59e0b; }
+        .b-cyan  { background: rgba(0, 229, 255, 0.15); color: #00e5ff; border: 1px solid #00e5ff; }
+        .b-purple{ background: rgba(168, 85, 247, 0.2); color: #d8b4fe; border: 1px solid #a855f7; }
+        .b-red   { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; }
+
+        .tour-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+            margin-top: 4px;
+        }
+        .tour-table th, .tour-table td {
+            border: 1px solid #1e293b;
+            padding: 8px 10px;
+            text-align: left;
+        }
+        .tour-table th {
+            background: #0f172a;
+            color: var(--led-amber);
+            font-family: var(--font-mono);
+            font-size: 0.74rem;
+            text-transform: uppercase;
+        }
+        .tour-table tr:nth-child(even) td {
+            background: rgba(15, 23, 42, 0.45);
+        }
+    </style>
+</head>
+<body class="help-page">
+    <div class="help-container">
+
+        <!-- TOP HEADER -->
+        <div class="help-top-bar">
+            <div class="help-title-wrap">
+                <h1>❓ HANDBUCH & FUNKTIONSÜBERSICHT</h1>
+                <p>FAIRGROUND ONLINE — MASTER OPERATOR DESK (WEB-APP & TELEMETRIE)</p>
+            </div>
+            <a href="index.html" class="back-btn">⬅️ ZURÜCK ZUM FAHRPULT</a>
+        </div>
+
+        <div class="help-grid">
+
+            <!-- 1. TOP HEADER & TELEMETRIE -->
+            <div class="help-card">
+                <div class="help-card-head">
+                    <h2>📊 1. SPS-Header & Echtzeit-Telemetrie</h2>
+                    <span class="help-tag">LIVE 10 HZ</span>
+                </div>
+                <ul class="help-list">
+                    <li>
+                        <span class="badge-inline b-cyan">MEGADANCE / BOOSTER</span>
+                        <strong>Fahrgeschäft-Umschalter:</strong> Wechselt das gesamte Pult nahtlos zwischen dem <strong>MegaDance (Break Dance)</strong> und dem <strong>Booster Propeller (Turaka)</strong>.
+                    </li>
+                    <li>
+                        <span class="badge-inline b-amber">FAHRZEIT</span>
+                        <strong>Synchroner Fahrt-Timer:</strong> Zeigt während einer <strong>AutoDrive-Fahrt</strong> den exakten Phasen-/Pausen-Countdown (<code>AUTODRIVE</code> / <code>PAUSE</code>). Beim manuellen Fahren startet der Timer automatisch, sobald die Motoren laufen (inkl. 2,5 Sek. Toleranz bei kurzen Richtungswechseln).
+                    </li>
+                    <li>
+                        <span class="badge-inline b-amber">KIRMESZEIT ⚙️</span>
+                        <strong>Weltzeit, Datum & Wetter:</strong> Liest die echte In-Game-Uhrzeit und das Datum direkt aus der Enviro3-Engine aus (auch wenn das In-Game-Tablet geschlossen ist). <strong>Tipp:</strong> Ein Klick auf die Uhr öffnet die Host-Steuerung!
+                    </li>
+                    <li>
+                        <span class="badge-inline b-green">OPERATOR LOCK</span>
+                        <strong>Intelligente Pult-Sperre:</strong> Sobald du dich im Spiel ans Pult setzt, wird das Web-Pult automatisch freigeschaltet (<code>BETRIEBSBEREIT</code>). Stehst du auf, sind die Fahrregler gegen Fehlklicks geschützt — Not-Aus, Licht/S2L und Host-Einstellungen bleiben jedoch jederzeit bedienbar.
+                    </li>
+                    <li>
+                        <span class="badge-inline b-green">ALL READY</span>
+                        <strong>Master-Sicherheitsanzeige:</strong> Überwacht live alle 24 Gondeln (48 Sitze beim MegaDance) bzw. beide Gondeln (16 Sitze beim Booster) sowie Not-Aus und Wind-Alarm.
+                    </li>
+                </ul>
+            </div>
+
+            <!-- 2. PULT-ZENTRALE & SICHERHEIT -->
+            <div class="help-card">
+                <div class="help-card-head">
+                    <h2>🛡️ 2. Pult-Zentrale & Gondel-Sicherheit</h2>
+                    <span class="help-tag">SPALTE LINKS</span>
+                </div>
+                <ul class="help-list">
+                    <li>
+                        <span class="badge-inline b-green">🔒 / 🔓 BÜGEL</span>
+                        <strong>Bügel-Großbedienung:</strong> Verriegelt oder öffnet alle 24 Gondeln (MegaDance) auf Knopfdruck. Beim Booster steuerst du an gleicher Stelle das hydraulische <strong>Podium (Senken / Heben)</strong> sowie <strong>Hauptschalter & Druckluftpistole</strong>.
+                    </li>
+                    <li>
+                        <span class="badge-inline b-cyan">ANTRIEBE</span>
+                        <strong>Steuertasten mit Echtzeit-LED:</strong>
+                        <br>• <code>VORRÜCKEN (P+K TIP)</code>: Langsames Vorrücken zum Ein-/Aussteigen.
+                        <br>• <code>KREUZ REVERSE</code>: Drehrichtung der Gondelkreuze umkehren.
+                        <br>• <code>GONDELBREMSE</code>: Gondeln arretieren oder zum Schwingen freigeben.
+                        <br>• <code>MOTOR PLATTE / KREUZ</code>: Hauptmotoren einzeln ein-/ausschalten.
+                    </li>
+                    <li>
+                        <span class="badge-inline b-green">24 GONDELN</span>
+                        <strong>Interaktiver Sicherheitsplan (Kreuz 1–4):</strong> Zeigt jede einzelne Gondel (<code>01</code> bis <code>24</code>) live in <strong>Grün</strong> (besetzt & geschlossen), <strong>Rot blinkend</strong> (besetzt, aber Bügel offen!) oder <strong>Grau</strong> (leer).
+                    </li>
+                    <li>
+                        <span class="badge-inline b-red">NOT-AUS</span>
+                        <strong>Emergency Shutdown Pilztaster:</strong> Stoppt sofort alle Motoren, zieht die Bremsen an und setzt die Regler auf <code>0%</code>.
+                    </li>
+                </ul>
+            </div>
+
+            <!-- 3. AUTODRIVE FAHRPROGRAMM & AUTOMODUS -->
+            <div class="help-card full-width">
+                <div class="help-card-head">
+                    <h2>🏎️ 3. AutoDrive Fahrprogramm & Endlos-Automodus</h2>
+                    <span class="help-tag">VOLLAUTOMATIK</span>
+                </div>
+                <ul class="help-list">
+                    <li>
+                        <span class="badge-inline b-amber">6 REKO-TOUREN</span>
+                        <strong>Echte Schausteller-Fahrprogramme:</strong> Jede Tour fährt vollautomatisch mit butterweichen Beschleunigungs-Rampen, Gegenlauf-Schleudern, Katapult-Drifts und sanftem Einparken. Standard-Fahrtdauer ist exakt <strong>4:00 Minuten</strong>.
+                    </li>
+                    <li>
+                        <span class="badge-inline b-cyan">🌙 3 MIN</span>
+                        <strong>Kurz- / Nachtmodus:</strong> Ist der Haken <code>🌙 3 Min</code> gesetzt, wird die gesamte Choreografie der gewählten Tour proportional auf <strong>3:00 Minuten</strong> verkürzt (kann auch live während der Fahrt umgeschaltet werden).
+                    </li>
+                    <li>
+                        <span class="badge-inline b-green">🔁 AUTOMODUS (ENDLOS)</span>
+                        <strong>Vollautomatischer Kirmesbetrieb mit Pausen-Timer:</strong>
+                        Wenn du <code>🔁 AUTOMODUS (ENDLOS)</code> aktivierst, öffnet AutoDrive nach dem Einparken automatisch die Bügel für den Gästewechsel, zählt die gewählte <strong>Pausenzeit (15 Sek bis 180 Sek)</strong> sichtbar herunter, verriegelt danach wieder die Bügel und startet automatisch die nächste Fahrt!
+                    </li>
+                    <li>
+                        <span class="badge-inline b-purple">🙌 ZUFALLS-PEEPS</span>
+                        <strong>Natürliche Besucher-Reaktionen:</strong> Während der AutoDrive-Phasen (Drops, Finale, Ausrollen) reagieren zufällig ausgewählte Fahrgäste (immer ca. 40%–85% der besetzten Sitze) zu variablen Zeitpunkten mit <em>Hände hoch</em> oder <em>Klatschen</em> und nehmen die Arme danach von selbst wieder herunter.
+                    </li>
+                </ul>
+
+                <table class="tour-table">
+                    <thead>
+                        <tr>
+                            <th>Tour</th>
+                            <th>Charakter & Fahrgefühl</th>
+                            <th>Highlights im Ablauf</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Tour 1: Klassiker</strong></td>
+                            <td>Harmonisch & rund</td>
+                            <td>Sanftes Boarding, klassische Wellen, Gegenlauf-Swing & 100%-Finale</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Tour 2: Reko-Drift</strong></td>
+                            <td>Schnelle Schübe & Katapult</td>
+                            <td>Schneller Kickstart, Freiflug-Drifts (Kreuz rollt frei) & Reverse-Boost</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Tour 3: Turbo-Power</strong></td>
+                            <td>Druckvoll & intensiv</td>
+                            <td>90% Power-Start, Overdrive, kurzer Cooldown-Dip & doppelter Endspurt</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Tour 4: Katapult</strong></td>
+                            <td>Schock-Gaps & Drops</td>
+                            <td>Platte bremst kurz auf 25% während Kreuze auf 100% weiterfeuern + Gegenlauf</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Tour 5: Showdown</strong></td>
+                            <td>Festival-Ritt (9 Phasen)</td>
+                            <td>Maximale Dynamik, Eye-of-the-Storm Pause & Double-Reverse-Eskalation</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Tour 🎲: Zufallstour</strong></td>
+                            <td>Überraschung</td>
+                            <td>Wählt bei jedem Start (und in jeder Automodus-Runde) eine zufällige Tour (1–5)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 4. FAHRANTRIEBE (MITTE) -->
+            <div class="help-card">
+                <div class="help-card-head">
+                    <h2>🎚️ 4. Fahrantriebe & Speed-Pads</h2>
+                    <span class="help-tag">SPALTE MITTE</span>
+                </div>
+                <ul class="help-list">
+                    <li>
+                        <span class="badge-inline b-cyan">DUAL-FADER</span>
+                        <strong>Hauptscheibe & Gondelkreuze (MegaDance):</strong> Zwei unabhängige Vertikal-Fader (<code>0%</code> bis <code>100%</code>) mit Echtzeit-Anzeige der physikalischen Drehzahl in Grad pro Sekunde (<code>°/s</code>).
+                    </li>
+                    <li>
+                        <span class="badge-inline b-cyan">SPEED-PADS</span>
+                        <strong>10%-Schnellwahltasten:</strong> Direktwahltasten von <code>0%</code> über <code>10%–90%</code> bis <code>100%</code> für blitzschnelle Reko-Manöver per Touch oder Maus.
+                    </li>
+                    <li>
+                        <span class="badge-inline b-amber">BOOSTER 55M</span>
+                        <strong>Propeller-Steuerung:</strong> Eigener Hauptarm-Fader, Drehrichtungs-Umschalter, <strong>Automatisches Parken (P1 Gondel 1 / P2 Gondel 2)</strong>, separate Gondelbremsen & Bügel-Tasten sowie Live-<strong>Wind-Alarm</strong> Überwachung.
+                    </li>
+                </ul>
+            </div>
+
+            <!-- 5. REKO-BOARD, S2L & DMX-MATRIX (RECHTS) -->
+            <div class="help-card">
+                <div class="help-card-head">
+                    <h2>⚡ 5. Reko-Board, Sound2Light & DMX</h2>
+                    <span class="help-tag">SPALTE RECHTS</span>
+                </div>
+                <ul class="help-list">
+                    <li>
+                        <span class="badge-inline b-amber">REKO-TASTER</span>
+                        <strong>4 große Show-Buttons:</strong>
+                        <br>• <code>📢 SIGNALHORN</code> & <code>🔥 FEUERSTOSS</code> & <code>⚡ STROBO FLASH</code>: Reagieren wie echte Hardware-Taster auf Gedrückthalten!
+                        <br>• <code>💨 NEBEL</code>: Schaltet die Nebelmaschinen dauerhaft AN / AUS.
+                    </li>
+                    <li>
+                        <span class="badge-inline b-cyan">BESUCHER SHOW</span>
+                        <strong>Manuelle Peep-Animationen:</strong> Mit <code>🙌 HÄNDE HOCH</code>, <code>👏 KLATSCHEN</code> und <code>🎉 ZUGABE!</code> heizt du die Fahrgäste jederzeit manuell an.
+                    </li>
+                    <li>
+                        <span class="badge-inline b-purple">🎵 SOUND2LIGHT</span>
+                        <strong>In-Game Audio Beat-Sync (1:1 StreamDeck):</strong>
+                        Analysiert live Bass & Beats der In-Game-Musik. Inklusive <strong>Empfindlichkeits-Regler (0–100%)</strong>, <code>DROP (MAX)</code>, <code>NACHT</code>, <code>PAUSEN</code>, 9 einzeln wählbaren Effekt-Filtern (Strobo, Nebel, Flammen, Blasen, Peep-Reaktionen) und <strong>Einzellicht-Matrix (L1–L9)</strong>.
+                    </li>
+                    <li>
+                        <span class="badge-inline b-green">DMX & SPOTS</span>
+                        <strong>SkySpots & Moving Heads Matrix:</strong>
+                        12 Direktfarben für die Suchscheinwerfer sowie 3 übersichtliche Tabs (<code>🎯 MUSTER</code>, <code>🌈 FARBE</code>, <code>🔮 GOBO</code>) mit allen originalen Programm-Namen aus dem Spiel + Tempo- & Gobo-Rotations-Slidern.
+                    </li>
+                </ul>
+            </div>
+
+            <!-- 6. HOST-STEUERUNG, KASSE & MOBILER QR-CODE -->
+            <div class="help-card full-width">
+                <div class="help-card-head">
+                    <h2>🎪 6. Host-Leitstand (Wetter/Zeit/Kasse), Audio-Player & Handy-Zugriff</h2>
+                    <span class="help-tag">HOST & MOBILE</span>
+                </div>
+                <ul class="help-list">
+                    <li>
+                        <span class="badge-inline b-amber">⚙️ HOST-MODAL</span>
+                        <strong>Kirmes-Leitstand (Klick auf die Uhrzeit oben im Header):</strong>
+                        <br>• <strong>Tageszeit & Echtzeit-Modus:</strong> Stufenloser 24h-Schieberegler + 5 Schnelltasten (Morgen, Mittag, Abend, Nacht, Mitternacht).
+                        <br>• <strong>Wetter-Steuerung:</strong> Direktwahl zwischen <em>☀️ Sonnig, ⛅ Heiter, ☁️ Bewölkt, 🌧️ Regen, ⛈️ Gewitter</em> und <em>🌫️ Nebel</em>.
+                        <br>• <strong>Besucher & Fahrpreis:</strong> Besucher aktivieren/deaktivieren, <strong>Max. Besucherlimit (0–1000)</strong> regeln und den <strong>Kassen-Ticketpreis</strong> live günstiger oder teurer stellen.
+                    </li>
+                    <li>
+                        <span class="badge-inline b-cyan">🎵 FOOTER</span>
+                        <strong>Festplatz-Statistik & Audio-Player:</strong> Unten siehst du live die Gesamtbesucher auf dem Platz, die Warteschlange an der Kasse, gesammelte Chips sowie die Musik-Steuerung (<code>⏮️ Zurück</code>, <code>▶️/⏸️ Play/Pause</code>, <code>⏭️ Weiter</code>).
+                    </li>
+                    <li>
+                        <span class="badge-inline b-green">📱 QR-CODE</span>
+                        <strong>Handy & Tablet als echtes Zweit-Pult:</strong> Scanne den QR-Code unten links im Pult mit deinem Smartphone oder Tablet (im selben WLAN), um die Konsole parallel zum Spiel per Touchscreen zu bedienen!
+                    </li>
+                </ul>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>
