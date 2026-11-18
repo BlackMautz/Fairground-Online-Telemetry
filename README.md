@@ -10,6 +10,12 @@ Ein **BepInEx 6 (IL2CPP)** Plugin + integriertes **Web-Fahrpult** für *Fairgrou
 
 ## Was man damit alles machen kann (Features)
 
+### 📸 Vorschau (Web-Fahrpult)
+
+![Web-Fahrpult Übersicht](docs/webpult-1.jpg)
+
+![Web-Fahrpult Effekte, Licht & Not-Aus](docs/webpult-2.jpg)
+
 - **Vollautomatischer Start (kein Konsolenfenster):**
   - Beim Spielstart startet `FairgroundTelemetry.dll` den lokalen Webserver automatisch und unsichtbar im Hintergrund und öffnet direkt **`http://localhost:8080`** in deinem Standard-Browser.
   - Beim Beenden des Spiels wird der Hintergrund-Server automatisch wieder geschlossen.
