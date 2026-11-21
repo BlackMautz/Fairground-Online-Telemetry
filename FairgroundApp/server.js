@@ -730,10 +730,14 @@ async function runSoundExpressAutoRoutine(tourIdx = 0, durationMin = 3, skipWait
     while (soundExpressAutoDriveState.running && !seAutoCancel) {
         let timerInterval = null;
         try {
-            // 1. Warten auf Gaeste & Tickets sammeln
+            // 1. Warten auf Gaeste & Tickets sammeln (nur alle 3s abkassieren, damit es natuerlicher wirkt)
             setSePhase("WARTEN AUF GAESTE...", 0);
+            let lastCollectAt = Date.now();
             while (!seAutoCancel && !seForceStart) {
-                writeCommand({ collectTokens: true });
+                if (Date.now() - lastCollectAt >= 3000) {
+                    writeCommand({ collectTokens: true });
+                    lastCollectAt = Date.now();
+                }
                 const se = (getLatestTelemetry().soundExpress) || {};
                 const occ = se.occupiedSeats || 0;
                 const tot = se.totalSeats || 20;
@@ -2554,14 +2558,19 @@ async function runAutoDriveRoutine(tourIdx, isNight, durationMin) {
     let currentSec = totalSec;
     setAutoPhase("START", currentSec);
 
-    // Countdown interval timer
+    // Exakt gemessene Basis-Summen je Tour (scaledMs + unskalierte fixedMs)
     const tourBaseScaledMs = {
-        0: 111000, 1: 104300, 2: 97500, 3: 96800, 5: 99500, 6: 100000, 7: 117500, 8: 111500
+        0: 187000, 1: 181400, 2: 188500, 3: 179700, 4: 185000, 5: 172000, 6: 100000, 7: 117500, 8: 111500
     };
-    const mainBaseMs = tourBaseScaledMs[t] || 110000;
+    const tourBaseFixedMs = {
+        0: 8900, 1: 14200, 2: 5400, 3: 15200, 4: 9600, 5: 7500
+    };
+    const mainBaseMs = tourBaseScaledMs[t] || 185000;
+    const mainFixedMs = tourBaseFixedMs[t] || 0;
     // Feste Phasen: Intro ca. 26s + Outro ca. 18s = 44s
     const targetMainSec = Math.max(25, (dur * 60) - 44);
-    const scaleFactor = (targetMainSec * 1000) / mainBaseMs;
+    const targetScaledMs = Math.max(15000, (targetMainSec * 1000) - mainFixedMs);
+    const scaleFactor = targetScaledMs / mainBaseMs;
     const scale = (ms) => Math.max(300, Math.round(ms * scaleFactor));
 
     const totalRideMs = (dur * 60) * 1000;
@@ -3375,7 +3384,21 @@ function getMergedState() {
 }
 
 
+let lastTokenCollectMs = 0;
 function writeCommand(newCommands) {
+    // Globale 3-Sekunden-Drossel fuers Abkassieren (alle Fahrgeschaefte)
+    if (newCommands && newCommands.collectTokens) {
+        const now = Date.now();
+        if (now - lastTokenCollectMs < 3000) {
+            const copy = { ...newCommands };
+            delete copy.collectTokens;
+            newCommands = copy;
+            if (Object.keys(newCommands).length === 0) return;
+        } else {
+            lastTokenCollectMs = now;
+        }
+    }
+
     // Persist S2L settings & update in-memory override immediately
     saveS2LSettingsToDisk(newCommands);
 
