@@ -2665,7 +2665,7 @@ window.forceStartSoundExpressAutoDrive = forceStartSoundExpressAutoDrive;
 
 // --- GitHub Update-Checker fuer Fairground-Online-Telemetry ---
 (async function checkTelemetryModUpdate() {
-    const CURRENT_TELEMETRY_VERSION = '1.0.0-beta';
+    const CURRENT_TELEMETRY_VERSION = '1.1.0';
     try {
         const res = await fetch('https://api.github.com/repos/BlackMautz/Fairground-Online-Telemetry/releases?per_page=1');
         if (!res.ok) return;
