@@ -1,5 +1,12 @@
 # Changelog – Fairground Online Telemetry & Web-Fahrpult
 
+## v1.1.1 (2026-11-27)
+
+### Verbesserungen & Fehlerbehebungen
+- **Sauberes Beenden bei Steam:** `FairgroundTelemetry.dll` übergibt beim Starten des Web-Servers jetzt die eigene Spiel-PID (`FAIRGROUND_GAME_PID`) an `server.js`. Sobald `Fairground Online.exe` geschlossen wird, beendet sich `node.exe` innerhalb von ~1,5 Sekunden selbst, sodass Steam nicht mehr auf *„Wird ausgeführt“* hängen bleibt.
+
+---
+
 ## v1.1.0 (2026-11-21)
 
 ### Neu: Sound Express (Musik Express) Unterstützung

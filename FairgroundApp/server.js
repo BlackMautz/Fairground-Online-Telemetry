@@ -5,6 +5,18 @@ const path = require('path');
 const os = require('os');
 
 const PORT = 8080;
+const GAME_PID = parseInt(process.env.FAIRGROUND_GAME_PID || '0', 10);
+if (GAME_PID > 0) {
+    setInterval(() => {
+        try {
+            process.kill(GAME_PID, 0);
+        } catch (err) {
+            if (err && err.code === 'ESRCH') {
+                process.exit(0);
+            }
+        }
+    }, 1500).unref();
+}
 const ROOT_DIR = path.resolve(__dirname, '..');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
